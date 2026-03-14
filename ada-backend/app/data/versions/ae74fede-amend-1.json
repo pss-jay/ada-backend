@@ -1,0 +1,711 @@
+[
+  {
+    "version": "v0.1",
+    "protocol_id": "ae74fede-amend-1",
+    "timestamp": "2026-03-14T14:42:44.837206Z",
+    "author": "Dr. Chen",
+    "label": "Amendment 1 - Initial Draft",
+    "status": "Draft",
+    "content_hash": "346cac0327ba",
+    "extracted_json": {
+      "StudyNo": "",
+      "BasicDetails": {
+        "TestPeriod": "",
+        "RecoveryPeriod": "",
+        "TestSubject": "",
+        "TestArticleName": "",
+        "StudyNo": "SWN-2026-042",
+        "SponsorRefNo": "",
+        "SponsorName": "",
+        "SponsorAddress": {
+          "Street": "",
+          "City": "",
+          "State": "",
+          "ZipCode": "",
+          "Country": ""
+        }
+      },
+      "StudyInfo": {
+        "Objective": "Evaluate compound XYZ safety",
+        "ClassOrActionOfTestArticle": "",
+        "Route": "",
+        "RouteDuration": "",
+        "RecoveryPeriod": "",
+        "TestArticleNameWithTexicokinecCharacteristics": "",
+        "TestSpeciesName": "",
+        "TestSpeciesSex": "",
+        "Schedule": {
+          "AnimalArrivalOrTransferOrAcclimationStartDate": [
+            {
+              "subsetType": "",
+              "subsetDate": ""
+            }
+          ],
+          "AuditedDraftDate": "",
+          "CompletionOfInLife": {},
+          "DosingInitiationDate": [
+            {
+              "subsetType": "",
+              "subsetDate": ""
+            }
+          ],
+          "FinalReportDate": ""
+        },
+        "StudyLength": ""
+      },
+      "Personnel": {
+        "SDS": {
+          "StudyDirector": {
+            "CellPhone": "",
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": ""
+          },
+          "SponsorStudyRepresentative": [
+            {
+              "Name": "",
+              "Credentials": "",
+              "CompanyName": "",
+              "Phone": "",
+              "Email": "",
+              "AddressOfTestingFacility": ""
+            }
+          ],
+          "SponsorStudyMonitor": [
+            {
+              "Name": "",
+              "Credentials": "",
+              "CompanyName": "",
+              "Phone": "",
+              "Email": "",
+              "AddressOfTestingFacility": ""
+            }
+          ],
+          "SponsorRepresentative": [
+            {
+              "Name": "",
+              "Credentials": "",
+              "CompanyName": "",
+              "Phone": "",
+              "Email": "",
+              "AddressOfTestingFacility": ""
+            }
+          ]
+        },
+        "ContributingScientists": [
+          {
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": "",
+            "StudyPhases": [
+              ""
+            ]
+          }
+        ],
+        "PrincipalInvestigatorAtTestingFacilityEnlistedTestSite": [
+          {
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": "",
+            "StudyPhases": [
+              ""
+            ]
+          }
+        ],
+        "PrincipalInvestigatorAtSponsorOrSponsorEnlistedTestSite": [
+          {
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": "",
+            "StudyPhases": [
+              ""
+            ]
+          }
+        ],
+        "PeerReviewPathologist": [
+          {
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": ""
+          }
+        ]
+      },
+      "RegulatoryCompliance": {
+        "GLPOrNonGLP": "",
+        "nonGLP": {},
+        "GLP": {},
+        "TestSiteCountry_Canada_Europe_UK": "",
+        "Canada": {},
+        "Europe": {},
+        "UK": {}
+      },
+      "QualityAssurance": {
+        "QATestingFacility": {},
+        "TestingFacilityEnlistedPrincipalInvestigators": {},
+        "SponsorOrSponsorEnlistedPrincipalInvestigator": {}
+      },
+      "TestMaterial": {
+        "TestArticle": [
+          {
+            "Identification": "",
+            "AlternateIdentification": "",
+            "LotBatchNo": "",
+            "CorrectionFactor": "",
+            "Concentration": "",
+            "ExpirationOrRetestDate": "",
+            "StorageConditions": ""
+          }
+        ],
+        "VehicleControl1": {
+          "Identification": "",
+          "AlternateIdentification": "",
+          "LotBatchNo": "",
+          "ExpirationOrRetestDate": "",
+          "StorageConditions": ""
+        },
+        "VehicleControl2": {
+          "Identification": "",
+          "AlternateIdentification": "",
+          "LotBatchNo": "",
+          "ExpirationOrRetestDate": "",
+          "StorageConditions": "",
+          "VehicleComponents": [
+            {}
+          ]
+        },
+        "TestMaterialPreparation": {},
+        "StabilityDoseFormulation": {},
+        "DoseFormulationAnalysis": {},
+        "TestMaterialInventoryAndDisposition": {}
+      },
+      "TestSystem": {
+        "SpeciesStrain": "",
+        "Supplier": "",
+        "Condition": "",
+        "MethodofIdentification": "",
+        "TargetBodyWeightRange": "",
+        "TargetAgeRage": "",
+        "NumberofAnimalsforAcclimation": "",
+        "NumberofAnimalsforDosing": ""
+      },
+      "Husbandry": {
+        "HousingConditions": {},
+        "EnvironmentalConditions": {},
+        "EnvironmentalEnrichment": {},
+        "DietAndFeeding": {},
+        "DrinkingWater": {}
+      },
+      "ClinicalPathology": {
+        "SampleCollection": {},
+        "Urinalysis": {},
+        "BoneMarrowSmearsEvaluation": {}
+      },
+      "ComputerizedSystemsandAnalyzers": {
+        "systems": [
+          {
+            "Name": "",
+            "Purpose": ""
+          }
+        ]
+      },
+      "AnimalCareCompliance": {
+        "Accreditation": "",
+        "Assurance": "",
+        "Registration": "",
+        "OversightCommittee": ""
+      },
+      "Reporting": {
+        "TabulatedDataSummary": "",
+        "TablesOnly": "",
+        "SENDDatasets": "",
+        "ReportNotes": ""
+      },
+      "ArchivalStorage": {
+        "PhysicalArchiveLocation": "",
+        "OffSiteArchiveSubcontractorAllowed": 0,
+        "SponsorContactTiming": "",
+        "SponsorContactPurpose": "",
+        "specimens": {},
+        "reserve_samples": {},
+        "ElectronicDataArchiving": {},
+        "ProvantisDataArchiving": {},
+        "OffSiteMaterialArchiving": {}
+      },
+      "References": "",
+      "TissueCollectionsandPreservation": {
+        "injection_sites": {},
+        "injection_site_location_specification": {}
+      },
+      "Approvals": {
+        "sponsor_approval_date": "",
+        "approval_method": "",
+        "approval_documentation_location": "",
+        "Usethefollowingformatwhenapplyingwetsignature": "",
+        "wet_signature_name_credentials": "",
+        "wet_signature_date": "",
+        "Usethefollowingformatwhenapplyingelectronicsignature": "",
+        "electronic_signature_name_credentials": "",
+        "study_director_role": ""
+      },
+      "ExperimentalDesign": {
+        "AnimalSource": "",
+        "AcclimationPeriod": "",
+        "AcclimationBeforeDosing": "",
+        "RandomizationAndAnimalAssignment": {},
+        "CompanionAnimals": {},
+        "StudyExperimentalDesign": {},
+        "AnesthesiaAndAnalgesiaProcedures": {},
+        "AdministrationofDoseFormulations": {},
+        "MaskingOrBlinding": {}
+      },
+      "ExperimentalObservationsandProcedures": {
+        "ApplicableCohorts": "",
+        "CohortType": "",
+        "IncludeSpares": "",
+        "ClinicalObservationsAndExaminations": {},
+        "ModifiedDraizeScoring": {},
+        "BodyWeight": {},
+        "Ophthalmology": {},
+        "TK_Flag": "",
+        "TKParagraph": {},
+        "FunctionalObservationalBatteryAssessments": {},
+        "FoodConsumption": {},
+        "Tonometry": {},
+        "Electrocardiography": {},
+        "NeurologicalAssessments": {}
+      },
+      "LaboratoryAssessments": {
+        "BloodCollection": {},
+        "SampleCollection": {},
+        "BioanalysisAndToxicokineticEvaluation": {},
+        "ImmunophenotypingOfPeripheralBloodAnalysis": {},
+        "AntiDrugAntibodySampleProcessingandAnalysis": {},
+        "CytokinesSampleProcessingAndAnalysis": {},
+        "Cohorts": {},
+        "OtherPlasmaorSerumforPotentialAnalysis": {},
+        "ThyroidAndTestosteroneEvaluation": {},
+        "TroponinIAndC_ReactiveProteinEvaluation": {}
+      },
+      "TerminalProceduresandPathology": {
+        "NecropsyStatus": {},
+        "InLifeCompletion": {},
+        "ScheduledEuthanasia": {},
+        "UnscheduledEuthanasia": {},
+        "FoundDead": {},
+        "HistologyandHistopathology": {},
+        "UE_and_FD_Sections": {},
+        "OrganWeights": {},
+        "PathologyPeerReview": {},
+        "TissueCollectionForBiodistribution": {},
+        "UEandFDSections": {}
+      },
+      "DataAnalysis": {
+        "DataPresentationOptions": {},
+        "StatisticalAnalyses": {},
+        "NumericalDataHandling": {},
+        "SpecialScoringMethods": {},
+        "Non_NumericalDataHandling": {},
+        "ExcludedSubjects": {},
+        "StatisticalAnalysisforFunctionalObservationalBattery": {}
+      },
+      "StudyDesignGuidance": {
+        "Non_GLP": "",
+        "NonGLP": "",
+        "GLP": "",
+        "ICHS3a": "",
+        "ICHS4": "",
+        "ICHS6_R1": "",
+        "ICHS6R1": "",
+        "ICHS7A": "",
+        "ICHS7B": "",
+        "ICHS8": "",
+        "species_selected": "",
+        "reason_for_species_selection": "",
+        "growth_characteristics": "",
+        "disease_status": "",
+        "spontaneous_abnormality_level": "",
+        "number_of_animals": "",
+        "justification_for_animal_number": "",
+        "route_of_administration": "",
+        "justification_for_route": "",
+        "dose_levels": "",
+        "justification_for_dose_levels": "",
+        "Specifypeciesprovidesomelevelofdetailandincludereferencesifavailable": "",
+        "frequency_of_administration": "",
+        "justification_for_frequency": ""
+      },
+      "StudyCompanyName": ""
+    },
+    "field_count": 14
+  },
+  {
+    "version": "v0.2",
+    "protocol_id": "ae74fede-amend-1",
+    "timestamp": "2026-03-14T14:42:45.087609Z",
+    "author": "Dr. Chen",
+    "label": "Amendment 1 - v0.2",
+    "status": "In Progress",
+    "content_hash": "25399c4211d2",
+    "extracted_json": {
+      "StudyNo": "",
+      "BasicDetails": {
+        "TestPeriod": "",
+        "RecoveryPeriod": "",
+        "TestSubject": "Minipigs + Recovery",
+        "TestArticleName": "",
+        "StudyNo": "SWN-2026-042",
+        "SponsorRefNo": "",
+        "SponsorName": "",
+        "SponsorAddress": {
+          "Street": "",
+          "City": "",
+          "State": "",
+          "ZipCode": "",
+          "Country": ""
+        }
+      },
+      "StudyInfo": {
+        "Objective": "Evaluate compound XYZ safety",
+        "ClassOrActionOfTestArticle": "",
+        "Route": "",
+        "RouteDuration": "",
+        "RecoveryPeriod": "",
+        "TestArticleNameWithTexicokinecCharacteristics": "",
+        "TestSpeciesName": "",
+        "TestSpeciesSex": "",
+        "Schedule": {
+          "AnimalArrivalOrTransferOrAcclimationStartDate": [
+            {
+              "subsetType": "",
+              "subsetDate": ""
+            }
+          ],
+          "AuditedDraftDate": "",
+          "CompletionOfInLife": {},
+          "DosingInitiationDate": [
+            {
+              "subsetType": "",
+              "subsetDate": ""
+            }
+          ],
+          "FinalReportDate": ""
+        },
+        "StudyLength": ""
+      },
+      "Personnel": {
+        "SDS": {
+          "StudyDirector": {
+            "CellPhone": "",
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": ""
+          },
+          "SponsorStudyRepresentative": [
+            {
+              "Name": "",
+              "Credentials": "",
+              "CompanyName": "",
+              "Phone": "",
+              "Email": "",
+              "AddressOfTestingFacility": ""
+            }
+          ],
+          "SponsorStudyMonitor": [
+            {
+              "Name": "",
+              "Credentials": "",
+              "CompanyName": "",
+              "Phone": "",
+              "Email": "",
+              "AddressOfTestingFacility": ""
+            }
+          ],
+          "SponsorRepresentative": [
+            {
+              "Name": "",
+              "Credentials": "",
+              "CompanyName": "",
+              "Phone": "",
+              "Email": "",
+              "AddressOfTestingFacility": ""
+            }
+          ]
+        },
+        "ContributingScientists": [
+          {
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": "",
+            "StudyPhases": [
+              ""
+            ]
+          }
+        ],
+        "PrincipalInvestigatorAtTestingFacilityEnlistedTestSite": [
+          {
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": "",
+            "StudyPhases": [
+              ""
+            ]
+          }
+        ],
+        "PrincipalInvestigatorAtSponsorOrSponsorEnlistedTestSite": [
+          {
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": "",
+            "StudyPhases": [
+              ""
+            ]
+          }
+        ],
+        "PeerReviewPathologist": [
+          {
+            "Name": "",
+            "Credentials": "",
+            "CompanyName": "",
+            "Phone": "",
+            "Email": "",
+            "AddressOfTestingFacility": ""
+          }
+        ]
+      },
+      "RegulatoryCompliance": {
+        "GLPOrNonGLP": "",
+        "nonGLP": {},
+        "GLP": {},
+        "TestSiteCountry_Canada_Europe_UK": "",
+        "Canada": {},
+        "Europe": {},
+        "UK": {}
+      },
+      "QualityAssurance": {
+        "QATestingFacility": {},
+        "TestingFacilityEnlistedPrincipalInvestigators": {},
+        "SponsorOrSponsorEnlistedPrincipalInvestigator": {}
+      },
+      "TestMaterial": {
+        "TestArticle": [
+          {
+            "Identification": "",
+            "AlternateIdentification": "",
+            "LotBatchNo": "",
+            "CorrectionFactor": "",
+            "Concentration": "",
+            "ExpirationOrRetestDate": "",
+            "StorageConditions": ""
+          }
+        ],
+        "VehicleControl1": {
+          "Identification": "",
+          "AlternateIdentification": "",
+          "LotBatchNo": "",
+          "ExpirationOrRetestDate": "",
+          "StorageConditions": ""
+        },
+        "VehicleControl2": {
+          "Identification": "",
+          "AlternateIdentification": "",
+          "LotBatchNo": "",
+          "ExpirationOrRetestDate": "",
+          "StorageConditions": "",
+          "VehicleComponents": [
+            {}
+          ]
+        },
+        "TestMaterialPreparation": {},
+        "StabilityDoseFormulation": {},
+        "DoseFormulationAnalysis": {},
+        "TestMaterialInventoryAndDisposition": {}
+      },
+      "TestSystem": {
+        "SpeciesStrain": "",
+        "Supplier": "",
+        "Condition": "",
+        "MethodofIdentification": "",
+        "TargetBodyWeightRange": "",
+        "TargetAgeRage": "",
+        "NumberofAnimalsforAcclimation": "",
+        "NumberofAnimalsforDosing": ""
+      },
+      "Husbandry": {
+        "HousingConditions": {},
+        "EnvironmentalConditions": {},
+        "EnvironmentalEnrichment": {},
+        "DietAndFeeding": {},
+        "DrinkingWater": {}
+      },
+      "ClinicalPathology": {
+        "SampleCollection": {},
+        "Urinalysis": {},
+        "BoneMarrowSmearsEvaluation": {}
+      },
+      "ComputerizedSystemsandAnalyzers": {
+        "systems": [
+          {
+            "Name": "",
+            "Purpose": ""
+          }
+        ]
+      },
+      "AnimalCareCompliance": {
+        "Accreditation": "",
+        "Assurance": "",
+        "Registration": "",
+        "OversightCommittee": ""
+      },
+      "Reporting": {
+        "TabulatedDataSummary": "",
+        "TablesOnly": "",
+        "SENDDatasets": "",
+        "ReportNotes": ""
+      },
+      "ArchivalStorage": {
+        "PhysicalArchiveLocation": "",
+        "OffSiteArchiveSubcontractorAllowed": 0,
+        "SponsorContactTiming": "",
+        "SponsorContactPurpose": "",
+        "specimens": {},
+        "reserve_samples": {},
+        "ElectronicDataArchiving": {},
+        "ProvantisDataArchiving": {},
+        "OffSiteMaterialArchiving": {}
+      },
+      "References": "",
+      "TissueCollectionsandPreservation": {
+        "injection_sites": {},
+        "injection_site_location_specification": {}
+      },
+      "Approvals": {
+        "sponsor_approval_date": "",
+        "approval_method": "",
+        "approval_documentation_location": "",
+        "Usethefollowingformatwhenapplyingwetsignature": "",
+        "wet_signature_name_credentials": "",
+        "wet_signature_date": "",
+        "Usethefollowingformatwhenapplyingelectronicsignature": "",
+        "electronic_signature_name_credentials": "",
+        "study_director_role": ""
+      },
+      "ExperimentalDesign": {
+        "AnimalSource": "",
+        "AcclimationPeriod": "",
+        "AcclimationBeforeDosing": "",
+        "RandomizationAndAnimalAssignment": {},
+        "CompanionAnimals": {},
+        "StudyExperimentalDesign": {},
+        "AnesthesiaAndAnalgesiaProcedures": {},
+        "AdministrationofDoseFormulations": {},
+        "MaskingOrBlinding": {},
+        "RecoveryPeriod": "28 days"
+      },
+      "ExperimentalObservationsandProcedures": {
+        "ApplicableCohorts": "",
+        "CohortType": "",
+        "IncludeSpares": "",
+        "ClinicalObservationsAndExaminations": {},
+        "ModifiedDraizeScoring": {},
+        "BodyWeight": {},
+        "Ophthalmology": {},
+        "TK_Flag": "",
+        "TKParagraph": {},
+        "FunctionalObservationalBatteryAssessments": {},
+        "FoodConsumption": {},
+        "Tonometry": {},
+        "Electrocardiography": {},
+        "NeurologicalAssessments": {}
+      },
+      "LaboratoryAssessments": {
+        "BloodCollection": {},
+        "SampleCollection": {},
+        "BioanalysisAndToxicokineticEvaluation": {},
+        "ImmunophenotypingOfPeripheralBloodAnalysis": {},
+        "AntiDrugAntibodySampleProcessingandAnalysis": {},
+        "CytokinesSampleProcessingAndAnalysis": {},
+        "Cohorts": {},
+        "OtherPlasmaorSerumforPotentialAnalysis": {},
+        "ThyroidAndTestosteroneEvaluation": {},
+        "TroponinIAndC_ReactiveProteinEvaluation": {}
+      },
+      "TerminalProceduresandPathology": {
+        "NecropsyStatus": {},
+        "InLifeCompletion": {},
+        "ScheduledEuthanasia": {},
+        "UnscheduledEuthanasia": {},
+        "FoundDead": {},
+        "HistologyandHistopathology": {},
+        "UE_and_FD_Sections": {},
+        "OrganWeights": {},
+        "PathologyPeerReview": {},
+        "TissueCollectionForBiodistribution": {},
+        "UEandFDSections": {}
+      },
+      "DataAnalysis": {
+        "DataPresentationOptions": {},
+        "StatisticalAnalyses": {},
+        "NumericalDataHandling": {},
+        "SpecialScoringMethods": {},
+        "Non_NumericalDataHandling": {},
+        "ExcludedSubjects": {},
+        "StatisticalAnalysisforFunctionalObservationalBattery": {}
+      },
+      "StudyDesignGuidance": {
+        "Non_GLP": "",
+        "NonGLP": "",
+        "GLP": "",
+        "ICHS3a": "",
+        "ICHS4": "",
+        "ICHS6_R1": "",
+        "ICHS6R1": "",
+        "ICHS7A": "",
+        "ICHS7B": "",
+        "ICHS8": "",
+        "species_selected": "",
+        "reason_for_species_selection": "",
+        "growth_characteristics": "",
+        "disease_status": "",
+        "spontaneous_abnormality_level": "",
+        "number_of_animals": "",
+        "justification_for_animal_number": "",
+        "route_of_administration": "",
+        "justification_for_route": "",
+        "dose_levels": "",
+        "justification_for_dose_levels": "",
+        "Specifypeciesprovidesomelevelofdetailandincludereferencesifavailable": "",
+        "frequency_of_administration": "",
+        "justification_for_frequency": ""
+      },
+      "StudyCompanyName": ""
+    },
+    "field_count": 16
+  }
+]

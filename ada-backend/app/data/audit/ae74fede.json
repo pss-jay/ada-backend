@@ -1,0 +1,89 @@
+[
+  {
+    "timestamp": "2026-03-14T14:42:44.379890Z",
+    "action": "version_created",
+    "author": "Ada (auto-generated)",
+    "details": {
+      "version": "v0.1",
+      "status": "Draft",
+      "field_count": 12
+    },
+    "protocol_id": "ae74fede"
+  },
+  {
+    "timestamp": "2026-03-14T14:42:44.560547Z",
+    "action": "version_created",
+    "author": "Dr. Mitchell",
+    "details": {
+      "version": "v0.2",
+      "status": "In Review",
+      "field_count": 14
+    },
+    "protocol_id": "ae74fede"
+  },
+  {
+    "timestamp": "2026-03-14T14:42:44.607636Z",
+    "action": "field_edited",
+    "author": "Dr. Mitchell",
+    "details": {
+      "field": "BasicDetails.StudyNo",
+      "new_value": "SWN-2026-042"
+    },
+    "protocol_id": "ae74fede"
+  },
+  {
+    "timestamp": "2026-03-14T14:42:44.646164Z",
+    "action": "field_edited",
+    "author": "Dr. Mitchell",
+    "details": {
+      "field": "StudyInfo.Objective",
+      "new_value": "Evaluate compound XYZ safety"
+    },
+    "protocol_id": "ae74fede"
+  },
+  {
+    "timestamp": "2026-03-14T14:42:44.881052Z",
+    "action": "amendment_created",
+    "author": "Dr. Chen",
+    "details": {
+      "amendment_id": "ae74fede-amend-1",
+      "amendment_number": 1,
+      "base_version": "v0.2",
+      "reason": "Add recovery group per FDA"
+    },
+    "protocol_id": "ae74fede"
+  },
+  {
+    "timestamp": "2026-03-14T14:42:45.170781Z",
+    "action": "amendment_edited",
+    "author": "Dr. Chen",
+    "details": {
+      "amendment_number": 1,
+      "fields_changed": 2,
+      "version": "v0.2"
+    },
+    "protocol_id": "ae74fede"
+  },
+  {
+    "timestamp": "2026-03-14T14:42:45.446452Z",
+    "action": "version_created",
+    "author": "Dr. Chen",
+    "details": {
+      "version": "v1.0",
+      "status": "Approved",
+      "field_count": 16
+    },
+    "protocol_id": "ae74fede"
+  },
+  {
+    "timestamp": "2026-03-14T14:42:45.548490Z",
+    "action": "amendment_finalized",
+    "author": "Dr. Chen",
+    "details": {
+      "amendment_number": 1,
+      "final_version": "v1.0",
+      "merged_to_main": true
+    },
+    "protocol_id": "ae74fede"
+  }
+]
