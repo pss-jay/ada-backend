@@ -29,6 +29,11 @@ class StorageBackend(ABC):
         """Save/update a protocol record."""
         pass
 
+    @abstractmethod
+    def load_all_protocols(self) -> List[Dict[str, Any]]:
+        """Load summary info for all protocols."""
+        pass
+
     # --- Versions ---
     @abstractmethod
     def load_versions(self, protocol_id: str) -> List[Dict[str, Any]]:

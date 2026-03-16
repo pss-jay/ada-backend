@@ -1,0 +1,63 @@
+# ============================================================
+# Ada Platform - Docker Compose
+# ============================================================
+# Usage:
+#   docker compose up -d          # Start all services
+#   docker compose logs -f app    # Follow app logs
+#   docker compose down            # Stop all services
+#   docker compose up -d --build   # Rebuild and restart
+# ============================================================
+version: "3.9"
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ada-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MONGO_URI=mongodb://mongo:27017/ada-db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ada-data:/app/app/data
+      - ada-uploads:/app/uploads
+      - ada-output:/app/output
+      - ./templates:/app/templates:ro
+      - ./frontend:/app/frontend:ro
+    depends_on:
+      - mongo
+    networks:
+      - ada-net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  mongo:
+    image: mongo:7
+    container_name: ada-mongo
+    restart: unless-stopped
+    ports:
+      - "27031:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - ada-net
+
+volumes:
+  ada-data:
+  ada-uploads:
+  ada-output:
+  mongo-data:
+
+networks:
+  ada-net:
+    driver: bridge
+

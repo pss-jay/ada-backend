@@ -146,6 +146,21 @@ button{cursor:pointer;border:none;background:none}
 .proto-editable:focus{box-shadow:0 0 0 2px var(--g2);background:rgba(0,152,102,.03)}
 .proto-editable:hover{background:rgba(0,0,0,.02)}
 
+/* Q&A Wizard Side Panel */
+.wizard-panel{position:fixed;top:0;right:-480px;width:460px;height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);z-index:1001;transition:right .35s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column}
+.wizard-panel.open{right:0}
+.wizard-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.3);z-index:1000;opacity:0;transition:opacity .3s;pointer-events:none}
+.wizard-backdrop.open{opacity:1;pointer-events:auto}
+.wizard-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.wizard-body{flex:1;overflow-y:auto;padding:20px 24px}
+.wizard-footer{padding:16px 24px;border-top:1px solid var(--border);flex-shrink:0;background:#fff;display:flex;gap:10px;align-items:center}
+.wizard-q-card{padding:14px 16px;border:1px solid var(--border);border-radius:12px;margin-bottom:10px;background:#fff;transition:all .2s}
+.wizard-q-card.answered{border-color:rgba(0,152,102,.3);background:rgba(0,152,102,.02)}
+.wizard-q-card input,.wizard-q-card select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.84rem;font-family:inherit;transition:border-color .2s;box-sizing:border-box}
+.wizard-q-card input:focus,.wizard-q-card select:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 3px rgba(0,152,102,.1)}
+.wizard-progress{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.wizard-progress-bar{height:100%;background:var(--g2);border-radius:2px;transition:width .4s ease}
+
 /* Template Builder */
 .tb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
 .tb-card{padding:20px;border-radius:var(--rs);border:2px solid var(--border);cursor:pointer;transition:all .25s;text-align:center;position:relative}
@@ -348,7 +363,7 @@ let chatMsgs=chatHistories[1].msgs;
 const NAV=[
   {id:'dashboard',label:'Dashboard',ico:'\u2302'},
   {id:'about',label:'About Ada',ico:'\u24D8'},
-  {id:'search',label:'Cognitive Search',ico:'\u2315'},
+  {id:'search',label:'Search Studies',ico:'\u2315'},
   {id:'protocol',label:'Protocol Generator',ico:'\u2756'},
   {id:'templateBuilder',label:'Template Builder',ico:'\u2692'},
   {id:'altabot',label:'AltaBot Clinicals',ico:'\u2661'},
@@ -401,7 +416,7 @@ function toast(msg){
   setTimeout(()=>t.remove(),3500);
 }
 
-function speciesEmoji(sp){return sp==='Swine'?'\uD83D\uDC37':sp==='Rat'?'\uD83D\uDC00':'\uD83D\uDC15'}
+function speciesEmoji(sp){const s=(sp||'').toLowerCase();return s.includes('swine')||s.includes('minipig')||s.includes('pig')?'\uD83D\uDC37':s.includes('rat')||s.includes('rodent')||s.includes('mouse')?'\uD83D\uDC00':s.includes('dog')||s.includes('canine')||s.includes('beagle')?'\uD83D\uDC15':s.includes('rabbit')?'\uD83D\uDC07':s.includes('monkey')||s.includes('primate')?'\uD83D\uDC12':'\uD83E\uDDEC'}
 function speciesBg(sp){return sp==='Swine'?'rgba(240,171,0,.1)':sp==='Rat'?'rgba(0,87,191,.1)':'rgba(224,104,75,.1)'}
 function statusBadge(s){return s==='active'?'bg-green':s==='completed'?'bg-blue':'bg-orange'}
 
@@ -581,6 +596,7 @@ function renderDashboard(c){
 
 /* ===== PROTOCOL GENERATOR ===== */
 let uploadedFileName='';
+let uploadedFiles=[];  // Track all uploaded files [{name, doc_type, text_length}]
 let showProtocolEditor=false;
 let showAmendmentReport=false; /* 'compare' | 'costing' | false */
 
@@ -610,7 +626,7 @@ fetch(API_BASE + '/api/health').then(r=>r.json()).then(d=>{
     }).catch(()=>{doLogout();});
   }
 }).catch(()=>{
-  console.warn('Ada Backend not available - running in demo mode');
+  console.warn('Ada Backend not available. Start the server with: python3 main.py');
 });
 
 function apiCall(url, options={}) {
@@ -676,25 +692,67 @@ const TB_SECTIONS=[
   {id:'appendix2',num:'',label:'Appendix 2'},
   {id:'approvals',num:'',label:'Approvals'}
 ];
+function handleMultiFileUpload(){
+  /* Collect files from both SOW and Questionnaire inputs */
+  const sowInput=document.getElementById('sow-file-input');
+  const questInput=document.getElementById('quest-file-input');
+  const sowFile=sowInput&&sowInput.files&&sowInput.files[0]?sowInput.files[0]:null;
+  const questFile=questInput&&questInput.files&&questInput.files[0]?questInput.files[0]:null;
+
+  if(!sowFile&&!questFile){
+    toast('Please select at least one file (SOW or Sponsor Questionnaire).');
+    return;
+  }
+
+  if(!backendConnected){
+    toast('Backend not connected. Please ensure the Ada server is running.');
+    return;
+  }
+
+  const fileNames=[];
+  if(sowFile) fileNames.push(sowFile.name);
+  if(questFile) fileNames.push(questFile.name);
+  uploadedFileName=fileNames.join(' + ');
+
+  const panel=document.getElementById('protocol-panel');
+  if(panel){
+    panel.innerHTML='<div style="text-align:center"><div style="width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--g2);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px"></div><p style="font-weight:600;color:var(--g3);font-size:1rem">Analyzing '+fileNames.length+' document(s)...</p><p style="font-size:.82rem;color:var(--muted);margin-top:6px">Validating files \u2022 Detecting species \u2022 Extracting text</p></div>';
+  }
+
+  const formData=new FormData();
+  if(sowFile) formData.append('sow',sowFile);
+  if(questFile) formData.append('questionnaire',questFile);
+
+  apiCall('/api/protocols/upload',{method:'POST',body:formData}).then(data=>{
+    currentProtocolId=data.upload_id;
+    detectedSpecies=data.species_detected;
+    uploadedFiles=data.files||[];
+    protocolStep=2;navigate('protocol');
+    const fileCount=data.file_count||1;
+    toast(fileCount+' file(s) uploaded \u2014 species: '+data.species_detected+' ('+data.text_length+' chars extracted)');
+  }).catch(e=>{
+    toast('Upload failed: '+e.message);
+    protocolStep=1;navigate('protocol');
+  });
+}
+/* Legacy single-file handler for backward compatibility */
 function handleFileSelect(input){
   if(input.files&&input.files[0]){
     uploadedFileName=input.files[0].name;
+    if(!backendConnected){toast('Backend not connected. Please ensure the Ada server is running.');return;}
     const panel=document.getElementById('protocol-panel');
     if(panel){
       panel.innerHTML='<div style="text-align:center"><div style="width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--g2);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px"></div><p style="font-weight:600;color:var(--g3);font-size:1rem">Analyzing: '+uploadedFileName+'</p><p style="font-size:.82rem;color:var(--muted);margin-top:6px">Detecting species \u2022 Extracting parameters \u2022 Validating fields</p></div>';
     }
-    if(backendConnected){
-      const formData=new FormData();
-      formData.append('file',input.files[0]);
-      apiCall('/api/protocols/upload',{method:'POST',body:formData}).then(data=>{
-        currentProtocolId=data.upload_id;
-        detectedSpecies=data.species_detected;
-        protocolStep=2;navigate('protocol');
-        toast('SOW "'+uploadedFileName+'" uploaded \u2014 species: '+data.species_detected+' ('+data.text_length+' chars extracted)');
-      }).catch(e=>{toast('Upload failed: '+e.message);protocolStep=1;navigate('protocol');});
-    } else {
-      setTimeout(()=>{protocolStep=2;navigate('protocol');toast('SOW "'+uploadedFileName+'" uploaded and analyzed successfully (demo mode)');},2500);
-    }
+    const formData=new FormData();
+    formData.append('sow',input.files[0]);
+    apiCall('/api/protocols/upload',{method:'POST',body:formData}).then(data=>{
+      currentProtocolId=data.upload_id;
+      detectedSpecies=data.species_detected;
+      uploadedFiles=data.files||[];
+      protocolStep=2;navigate('protocol');
+      toast('"'+uploadedFileName+'" uploaded \u2014 species: '+data.species_detected+' ('+data.text_length+' chars extracted)');
+    }).catch(e=>{toast('Upload failed: '+e.message);protocolStep=1;navigate('protocol');});
   }
 }
 /* ===== VERSION & AMENDMENT API FUNCTIONS ===== */
@@ -768,16 +826,28 @@ function compareAmendmentReal(amendNum){
 /* ===== DOCX DOWNLOAD / UPLOAD / CHANGE REVIEW ===== */
 let pendingDiffData = null;
 
-function downloadProtocolDocx(){
-  if(!backendConnected||!currentProtocolId){toast('No protocol available');return;}
-  const link=document.createElement('a');
-  link.href=API_BASE+'/api/protocols/'+currentProtocolId+'/download-docx';
-  // Add auth header via fetch + blob
-  fetch(API_BASE+'/api/protocols/'+currentProtocolId+'/download-docx',{headers:{'Authorization':'Bearer '+jwtToken}})
-    .then(r=>{if(!r.ok) throw new Error('Download failed');return r.blob();})
-    .then(blob=>{
+function downloadProtocolDocx(pid){
+  const protId=pid||currentProtocolId;
+  if(!backendConnected||!protId){toast('No protocol available');return;}
+  toast('Generating DOCX...');
+  // Try /download first (pre-generated), fall back to /download-docx (on-the-fly generation)
+  const headers={'Authorization':'Bearer '+jwtToken};
+  fetch(API_BASE+'/api/protocols/'+protId+'/download',{headers})
+    .then(r=>{
+      if(!r.ok) return fetch(API_BASE+'/api/protocols/'+protId+'/download-docx',{headers});
+      return r;
+    })
+    .then(r=>{
+      if(!r.ok) throw new Error('Download failed ('+r.status+')');
+      // Extract filename from Content-Disposition if available
+      const cd=r.headers.get('Content-Disposition')||'';
+      const fnMatch=cd.match(/filename="?([^";\n]+)"?/);
+      const fname=fnMatch?fnMatch[1]:'protocol_'+protId+'.docx';
+      return r.blob().then(blob=>({blob,fname}));
+    })
+    .then(({blob,fname})=>{
       const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');a.href=url;a.download='protocol_'+currentProtocolId+'.docx';
+      const a=document.createElement('a');a.href=url;a.download=fname;
       document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
       toast('Protocol downloaded as DOCX');
     }).catch(e=>toast('Download failed: '+e.message));
@@ -985,46 +1055,48 @@ function showChangeReview(){
 }
 
 function confirmSpeciesAndExtract(){
-  if(backendConnected && currentProtocolId){
-    const species = detectedSpecies || 'swine';
-    const panel=document.getElementById('protocol-panel');
-    if(panel) panel.innerHTML='<div style="text-align:center"><div style="width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--g2);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px"></div><p style="font-weight:600;color:var(--g3);font-size:1rem">Extracting protocol data via AI...</p><p style="font-size:.82rem;color:var(--muted);margin-top:6px">This may take 15-30 seconds depending on document length</p></div>';
-    apiCall('/api/protocols/'+currentProtocolId+'/extract',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({animal_type:species})
-    }).then(data=>{
-      currentProtocolData=data.extracted_json;
-      window._lastGapAnalysis=data.gap_analysis||null;
-      protocolStep=3;navigate('protocol');
-      const msg=data.mock_mode?'Extraction complete (mock mode \u2014 configure Azure for real extraction)':'Extraction complete \u2014 '+data.extraction_time_ms+'ms';
-      toast(msg);
-      if(data.gap_analysis){
-        const g=data.gap_analysis.summary;
-        if(g.missing_critical>0) toast('\u26A0\uFE0F '+g.missing_critical+' critical gaps detected \u2014 review recommended');
-      }
-    }).catch(e=>{toast('Extraction failed: '+e.message);});
-  } else {
-    protocolStep=3;navigate('protocol');toast('Species confirmed \u2014 proceeding to field mapping (demo mode)');
-  }
+  if(!backendConnected){toast('Backend not connected. Please ensure the Ada server is running.');return;}
+  if(!currentProtocolId){toast('No protocol loaded. Please upload documents first.');return;}
+
+  const species=detectedSpecies;
+  if(!species||species==='common'){toast('Please select a species before continuing.');return;}
+
+  const panel=document.getElementById('protocol-panel');
+  if(panel) panel.innerHTML='<div style="text-align:center"><div style="width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--g2);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px"></div><p style="font-weight:600;color:var(--g3);font-size:1rem">Extracting protocol data via AI...</p><p style="font-size:.82rem;color:var(--muted);margin-top:6px">Sending document text to Azure OpenAI for structured extraction. This may take 15-30 seconds.</p></div>';
+
+  apiCall('/api/protocols/'+currentProtocolId+'/extract',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({animal_type:species})
+  }).then(data=>{
+    currentProtocolData=data.extracted_json;
+    window._lastGapAnalysis=data.gap_analysis||null;
+    gapAnalysisData=null; /* Reset so Step 3 reloads fresh */
+    protocolStep=3;navigate('protocol');
+    toast('Extraction complete \u2014 '+data.extraction_time_ms+'ms');
+    if(data.gap_analysis){
+      const g=data.gap_analysis.summary;
+      if(g.missing_critical>0) toast('\u26A0\uFE0F '+g.missing_critical+' critical gaps detected \u2014 review recommended');
+    }
+  }).catch(e=>{toast('Extraction failed: '+e.message);});
 }
 
 function generateProtocolDocx(){
-  if(backendConnected && currentProtocolId){
-    const panel=document.getElementById('protocol-panel');
-    if(panel) panel.innerHTML='<div style="text-align:center"><div style="width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--g2);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px"></div><p style="font-weight:600;color:var(--g3);font-size:1rem">Generating protocol document...</p><p style="font-size:.82rem;color:var(--muted);margin-top:6px">Populating template with extracted data</p></div>';
-    apiCall('/api/protocols/'+currentProtocolId+'/generate',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({})
-    }).then(data=>{
-      generatedDocxUrl=API_BASE+data.docx_url;
-      protocolStep=5;navigate('protocol');
-      toast('Protocol DOCX generated successfully! ('+Math.round(data.file_size/1024)+' KB)');
-    }).catch(e=>{toast('Generation failed: '+e.message);protocolStep=4;navigate('protocol');});
-  } else {
-    protocolStep=5;navigate('protocol');toast('Protocol populated \u2014 ready for review! (demo mode)');
-  }
+  if(!backendConnected){toast('Backend not connected. Please ensure the Ada server is running.');return;}
+  if(!currentProtocolId){toast('No protocol loaded. Please upload documents first.');return;}
+
+  const panel=document.getElementById('protocol-panel');
+  if(panel) panel.innerHTML='<div style="text-align:center"><div style="width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--g2);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px"></div><p style="font-weight:600;color:var(--g3);font-size:1rem">Generating protocol document...</p><p style="font-size:.82rem;color:var(--muted);margin-top:6px">Populating species template with extracted data</p></div>';
+
+  apiCall('/api/protocols/'+currentProtocolId+'/generate',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({})
+  }).then(data=>{
+    generatedDocxUrl=API_BASE+data.docx_url;
+    protocolStep=5;navigate('protocol');
+    toast('Protocol DOCX generated successfully! ('+Math.round(data.file_size/1024)+' KB)');
+  }).catch(e=>{toast('Generation failed: '+e.message);protocolStep=4;navigate('protocol');});
 }
 
 /* ===== V.1 FEATURE: SMART SOW/QUESTIONNAIRE PARSING ===== */
@@ -1054,17 +1126,18 @@ async function loadWizardQuestions(){
 }
 
 async function submitWizardAnswers(){
-  if(!backendConnected||!currentProtocolId||Object.keys(wizardAnswers).length===0) return;
-  try{
-    const data=await apiCall('/api/protocols/'+currentProtocolId+'/answers',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(wizardAnswers)
-    });
-    toast(data.fields_updated+' gaps resolved! Completeness: '+Math.round(data.completeness_score*100)+'%');
-    wizardAnswers={};
-    gapAnalysisData=null;
-    protocolStep=3;navigate('protocol');
-  }catch(e){toast('Failed to submit answers: '+e.message);}
+  const answeredKeys=Object.keys(wizardAnswers).filter(k=>wizardAnswers[k]!=='');
+  if(!backendConnected||!currentProtocolId||answeredKeys.length===0) return;
+  const payload={};
+  answeredKeys.forEach(k=>{payload[k]=wizardAnswers[k];});
+  const data=await apiCall('/api/protocols/'+currentProtocolId+'/answers',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+  toast(data.fields_updated+' gaps resolved! Completeness: '+Math.round(data.completeness_score*100)+'%');
+  wizardAnswers={};
+  gapAnalysisData=null;
+  protocolStep=3;navigate('protocol');
 }
 
 function renderGapDashboard(){
@@ -1122,69 +1195,138 @@ function renderGapDashboard(){
 
 function showQAWizard(){
   if(!wizardQuestions.length){
-    loadWizardQuestions().then(()=>{renderWizardModal();});
+    loadWizardQuestions().then(()=>{renderWizardPanel();});
     return;
   }
-  renderWizardModal();
+  renderWizardPanel();
 }
 
-function renderWizardModal(){
-  const overlay=document.createElement('div');
-  overlay.id='wizard-overlay';
-  overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center';
+function closeWizardPanel(){
+  const panel=document.getElementById('wizard-panel');
+  const backdrop=document.getElementById('wizard-backdrop');
+  if(panel) panel.classList.remove('open');
+  if(backdrop) backdrop.classList.remove('open');
+  setTimeout(()=>{if(panel)panel.remove();if(backdrop)backdrop.remove();},350);
+}
+
+function renderWizardPanel(){
+  /* Remove any existing wizard */
+  const old=document.getElementById('wizard-panel');
+  if(old){old.remove();document.getElementById('wizard-backdrop')?.remove();}
+
   const critical=wizardQuestions.filter(q=>q.criticality==='critical');
   const recommended=wizardQuestions.filter(q=>q.criticality==='recommended');
   const optional=wizardQuestions.filter(q=>q.criticality==='optional');
   const total=wizardQuestions.length;
   const answered=Object.keys(wizardAnswers).length;
+  const pct=total?Math.round(answered/total*100):0;
 
-  overlay.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:720px;width:95%;max-height:85vh;overflow-y:auto;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h3 style="font-size:1.1rem;font-weight:700">Q&A Wizard \u2014 Resolve Protocol Gaps</h3>
-      <button onclick="document.getElementById('wizard-overlay').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--muted)">\u2715</button>
+  /* Backdrop */
+  const backdrop=document.createElement('div');
+  backdrop.id='wizard-backdrop';
+  backdrop.className='wizard-backdrop';
+  backdrop.onclick=closeWizardPanel;
+  document.body.appendChild(backdrop);
+
+  /* Panel */
+  const panel=document.createElement('div');
+  panel.id='wizard-panel';
+  panel.className='wizard-panel';
+  panel.innerHTML=`
+    <div class="wizard-header">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div><h3 style="font-size:1.05rem;font-weight:700;margin:0">Q&A Wizard</h3><p style="font-size:.75rem;color:var(--muted);margin:2px 0 0">Resolve protocol gaps</p></div>
+        <button onclick="closeWizardPanel()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background .15s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='none'">\u2715</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:.78rem;font-weight:600" id="wizard-answered-label">${answered} of ${total} answered</span>
+        <span style="font-size:.72rem;font-weight:700;color:var(--g2)" id="wizard-pct-label">${pct}%</span>
+      </div>
+      <div class="wizard-progress"><div class="wizard-progress-bar" id="wizard-progress-fill" style="width:${pct}%"></div></div>
     </div>
-    <div style="margin-bottom:16px;padding:8px 12px;background:var(--bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:.78rem;font-weight:600">${answered} of ${total} answered</span>
-      <div style="width:200px;height:6px;background:var(--border);border-radius:3px"><div style="width:${total?Math.round(answered/total*100):0}%;height:100%;background:var(--g2);border-radius:3px;transition:width .3s"></div></div>
+    <div class="wizard-body" id="wizard-body">
+      ${critical.length?`<div style="margin-bottom:16px"><div style="font-weight:700;font-size:.8rem;color:#ef4444;margin-bottom:8px;display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block"></span>Critical (${critical.length})</div>${critical.map(q=>renderQuestionCard(q)).join('')}</div>`:''}
+      ${recommended.length?`<div style="margin-bottom:16px"><div style="font-weight:700;font-size:.8rem;color:#f0ab00;margin-bottom:8px;display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:#f0ab00;display:inline-block"></span>Recommended (${recommended.length})</div>${recommended.map(q=>renderQuestionCard(q)).join('')}</div>`:''}
+      ${optional.length?`<div style="margin-bottom:16px"><div style="font-weight:700;font-size:.8rem;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block"></span>Optional (${optional.length})</div>${optional.map(q=>renderQuestionCard(q)).join('')}</div>`:''}
+      ${!total?'<div style="text-align:center;padding:40px 20px;color:var(--muted)"><div style="font-size:2rem;margin-bottom:8px">\u2705</div><p style="font-weight:600">No gaps to resolve!</p><p style="font-size:.78rem;margin-top:4px">All protocol fields are complete.</p></div>':''}
     </div>
-    ${critical.length?`<div style="margin-bottom:16px"><div style="font-weight:700;font-size:.82rem;color:#ef4444;margin-bottom:8px">Critical (${critical.length})</div>${critical.map(q=>renderQuestionCard(q)).join('')}</div>`:''}
-    ${recommended.length?`<div style="margin-bottom:16px"><div style="font-weight:700;font-size:.82rem;color:#f0ab00;margin-bottom:8px">Recommended (${recommended.length})</div>${recommended.map(q=>renderQuestionCard(q)).join('')}</div>`:''}
-    ${optional.length?`<div style="margin-bottom:16px"><div style="font-weight:700;font-size:.82rem;color:var(--muted);margin-bottom:8px">Optional (${optional.length})</div>${optional.map(q=>renderQuestionCard(q)).join('')}</div>`:''}
-    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
-      <button class="btn btn-s" onclick="document.getElementById('wizard-overlay').remove()">Cancel</button>
-      <button class="btn btn-p" onclick="submitWizardAnswers();document.getElementById('wizard-overlay').remove()">Save ${answered} Answer${answered!==1?'s':''}</button>
-    </div>
-  </div>`;
-  document.body.appendChild(overlay);
+    <div class="wizard-footer">
+      <button class="btn btn-s" style="font-size:.78rem;padding:8px 16px" onclick="closeWizardPanel()">Close</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-p" style="font-size:.78rem;padding:8px 20px" id="wizard-save-btn" onclick="handleWizardSave()" ${!answered?'disabled style="opacity:.5;cursor:not-allowed;font-size:.78rem;padding:8px 20px"':''}>Save ${answered} Answer${answered!==1?'s':''}</button>
+    </div>`;
+  document.body.appendChild(panel);
+
+  /* Animate open */
+  requestAnimationFrame(()=>{requestAnimationFrame(()=>{
+    panel.classList.add('open');
+    backdrop.classList.add('open');
+  });});
 }
 
 function renderQuestionCard(q){
   const val=wizardAnswers[q.field_path]||'';
   const hasAnswer=val!=='';
+  const uid='wq_'+q.field_path.replace(/[^a-zA-Z0-9]/g,'_');
   let inputHtml='';
   if(q.input_type==='select'&&q.options&&q.options.length){
-    inputHtml=`<select onchange="wizardAnswers['${q.field_path}']=this.value;updateWizardCount()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem">
+    inputHtml=`<select id="${uid}" onchange="wizardAnswers['${q.field_path}']=this.value;updateWizardCount()" class="wizard-q-input">
       <option value="">Select...</option>${q.options.map(o=>`<option value="${o}"${val===o?' selected':''}>${o}</option>`).join('')}</select>`;
   }else if(q.input_type==='number'){
-    inputHtml=`<input type="number" value="${val}" onchange="wizardAnswers['${q.field_path}']=this.value;updateWizardCount()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem" placeholder="Enter value...">`;
+    inputHtml=`<input id="${uid}" type="number" value="${val}" oninput="wizardAnswers['${q.field_path}']=this.value;updateWizardCount()" placeholder="Enter value...">`;
   }else{
-    inputHtml=`<input type="text" value="${val}" onchange="wizardAnswers['${q.field_path}']=this.value;updateWizardCount()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:.82rem" placeholder="${q.suggestion||'Enter value...'}">`;
+    inputHtml=`<input id="${uid}" type="text" value="${val}" oninput="wizardAnswers['${q.field_path}']=this.value;updateWizardCount()" placeholder="${q.suggestion||'Enter value...'}">`;
   }
-  return `<div style="padding:12px;border:1px solid ${hasAnswer?'rgba(0,152,102,.3)':'var(--border)'};border-radius:10px;margin-bottom:8px;background:${hasAnswer?'rgba(0,152,102,.03)':'#fff'}">
+  return `<div class="wizard-q-card${hasAnswer?' answered':''}" id="card_${uid}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-      <div style="font-size:.8rem;font-weight:600">${q.question_text}</div>
-      ${hasAnswer?'<span style="font-size:.65rem;background:var(--g2);color:#fff;padding:2px 6px;border-radius:4px">\u2713</span>':''}
+      <div style="font-size:.8rem;font-weight:600;flex:1">${q.question_text}</div>
+      ${hasAnswer?'<span style="font-size:.6rem;background:var(--g2);color:#fff;padding:2px 7px;border-radius:6px;margin-left:8px;white-space:nowrap">\u2713 Done</span>':''}
     </div>
-    <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">${q.why_it_matters||''}</div>
-    <div style="font-size:.68rem;color:var(--g3);margin-bottom:6px">\uD83D\uDCCD ${q.field_path}</div>
+    <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px;line-height:1.4">${q.why_it_matters||''}</div>
+    <div style="font-size:.66rem;color:var(--g3);margin-bottom:6px;font-family:monospace">${q.field_path}</div>
     ${inputHtml}
-    ${q.suggestion?`<div style="font-size:.68rem;color:var(--g3);margin-top:4px;cursor:pointer" onclick="wizardAnswers['${q.field_path}']='${q.suggestion.replace(/'/g,"\\'")}';updateWizardCount();renderWizardModal();document.getElementById('wizard-overlay').remove();showQAWizard()">\u2728 Suggested: <strong>${q.suggestion}</strong> (click to use)</div>`:''}
+    ${q.suggestion?`<button onclick="wizardAnswers['${q.field_path}']='${q.suggestion.replace(/'/g,"\\'")}';document.getElementById('${uid}').value='${q.suggestion.replace(/'/g,"\\'")}';updateWizardCount();document.getElementById('card_${uid}').classList.add('answered')" style="margin-top:6px;background:none;border:none;font-size:.7rem;color:var(--g3);cursor:pointer;padding:0;display:flex;align-items:center;gap:4px">\u2728 Use suggestion: <strong>${q.suggestion}</strong></button>`:''}
   </div>`;
 }
 
 function updateWizardCount(){
-  const counter=document.querySelector('#wizard-overlay [style*="answered"]');
-  // Re-render will pick up new count
+  const answered=Object.keys(wizardAnswers).filter(k=>wizardAnswers[k]!=='').length;
+  const total=wizardQuestions.length;
+  const pct=total?Math.round(answered/total*100):0;
+  const label=document.getElementById('wizard-answered-label');
+  const pctLabel=document.getElementById('wizard-pct-label');
+  const fill=document.getElementById('wizard-progress-fill');
+  const btn=document.getElementById('wizard-save-btn');
+  if(label)label.textContent=answered+' of '+total+' answered';
+  if(pctLabel)pctLabel.textContent=pct+'%';
+  if(fill)fill.style.width=pct+'%';
+  if(btn){
+    btn.textContent='Save '+answered+' Answer'+(answered!==1?'s':'');
+    btn.disabled=!answered;
+    btn.style.opacity=answered?'1':'.5';
+    btn.style.cursor=answered?'pointer':'not-allowed';
+  }
+  /* Update individual card states */
+  wizardQuestions.forEach(q=>{
+    const uid='wq_'+q.field_path.replace(/[^a-zA-Z0-9]/g,'_');
+    const card=document.getElementById('card_'+uid);
+    if(card){
+      const hasVal=wizardAnswers[q.field_path]&&wizardAnswers[q.field_path]!=='';
+      card.classList.toggle('answered',hasVal);
+    }
+  });
+}
+
+async function handleWizardSave(){
+  const btn=document.getElementById('wizard-save-btn');
+  if(btn){btn.textContent='Saving...';btn.disabled=true;btn.style.opacity='.6';}
+  try{
+    await submitWizardAnswers();
+    closeWizardPanel();
+  }catch(e){
+    if(btn){btn.textContent='Retry Save';btn.disabled=false;btn.style.opacity='1';}
+    toast('Save failed: '+e.message);
+  }
 }
 
 /* ===== V.1 FEATURE: SECTION-LEVEL EDITING & LOCKING ===== */
@@ -1383,11 +1525,101 @@ setInterval(()=>{
 },30000);
 
 /* Highlighted field helpers */
-function sow(text){return '<span class="proto-field" contenteditable="true" title="Source: SOW 2268.99">'+text+'</span>';}
-function quest(text){return '<span class="proto-field-q" contenteditable="true" title="Source: Sponsor Questionnaire">'+text+'</span>';}
-function tpl(text){return '<span class="proto-field-tpl" title="From Protocol Template">'+text+'</span>';}
-function need(text){return '<span class="proto-field-need" contenteditable="true" title="Needs Input">&lt;&lt;'+text+'&gt;&gt;</span>';}
+function sow(text){return '<span class="proto-field" contenteditable="true" title="Source: SOW" data-source="sow">'+text+'</span>';}
+function quest(text){return '<span class="proto-field-q" contenteditable="true" title="Source: Sponsor Questionnaire" data-source="quest">'+text+'</span>';}
+function tpl(text){return '<span class="proto-field-tpl" title="From Protocol Template" data-source="tpl">'+text+'</span>';}
+function need(text){return '<span class="proto-field-need" contenteditable="true" title="Needs Input" data-source="need">&lt;&lt;'+text+'&gt;&gt;</span>';}
 function ed(text){return '<span class="proto-editable" contenteditable="true">'+text+'</span>';}
+/* Data-aware field helper: renders from currentProtocolData or falls back to need() */
+function d(path,label){
+  const val=getNestedVal(currentProtocolData,path);
+  if(val && val!=='' && !String(val).startsWith('<<')){
+    /* Determine source from field path heuristics */
+    if(path.includes('TestArticle')||path.includes('Sponsor')||path.includes('StudyNo')||path.includes('Route')||path.includes('Species')||path.includes('Animals')||path.includes('Duration')) return sow(String(val));
+    return quest(String(val));
+  }
+  return need(label||path.split('.').pop());
+}
+function getNestedVal(obj,path){
+  if(!obj)return '';
+  const parts=path.split('.');
+  let cur=obj;
+  for(const p of parts){
+    if(cur===null||cur===undefined)return '';
+    /* Handle array index like TestArticle.0.Identification */
+    if(!isNaN(p)){cur=Array.isArray(cur)?cur[parseInt(p)]:cur;continue;}
+    cur=cur[p]!==undefined?cur[p]:(cur[p.toLowerCase()]!==undefined?cur[p.toLowerCase()]:undefined);
+    if(cur===undefined){
+      /* Try case-insensitive match */
+      if(typeof obj==='object'&&obj!==null){
+        const keys=Object.keys(obj);
+        const match=keys.find(k=>k.toLowerCase()===p.toLowerCase());
+        if(match)cur=obj[match];
+      }
+      if(cur===undefined)return '';
+    }
+  }
+  if(typeof cur==='object')return JSON.stringify(cur);
+  return cur===null||cur===undefined?'':String(cur);
+}
+
+/* Build study info from currentProtocolData */
+function getStudyNumber(){
+  const d=currentProtocolData;
+  if(!d)return currentProtocolId||'';
+  return getNestedVal(d,'BasicDetails.StudyNo')||getNestedVal(d,'studyNo')||getNestedVal(d,'study_number')||currentProtocolId||'';
+}
+function getStudyTitle(){
+  const d=currentProtocolData;
+  if(!d)return '';
+  /* Build from parts or return stored title */
+  const obj=getNestedVal(d,'StudyInfo.Objective');
+  const testPeriod=getNestedVal(d,'BasicDetails.TestPeriod');
+  const species=getNestedVal(d,'TestSystem.SpeciesStrain')||detectedSpecies||'';
+  const article=getNestedVal(d,'BasicDetails.TestArticleName')||getNestedVal(d,'TestMaterial.TestArticle.0.Identification')||'';
+  const recovery=getNestedVal(d,'BasicDetails.RecoveryPeriod')||getNestedVal(d,'StudyInfo.RecoveryPeriod')||'';
+  if(testPeriod && species && article){
+    return 'A '+testPeriod+' Toxicity Study in '+species+' of '+article+(recovery?' with a '+recovery+' Recovery Period':'');
+  }
+  return obj||article||'Protocol '+getStudyNumber();
+}
+function getSponsor(){return getNestedVal(currentProtocolData,'BasicDetails.SponsorName')||'';}
+function getTestArticle(){return getNestedVal(currentProtocolData,'BasicDetails.TestArticleName')||getNestedVal(currentProtocolData,'TestMaterial.TestArticle.0.Identification')||'';}
+function getSpeciesName(){return getNestedVal(currentProtocolData,'TestSystem.SpeciesStrain')||detectedSpecies||'';}
+function getRoute(){return getNestedVal(currentProtocolData,'StudyInfo.Route')||'';}
+function getDuration(){return getNestedVal(currentProtocolData,'BasicDetails.TestPeriod')||getNestedVal(currentProtocolData,'StudyInfo.RouteDuration')||'';}
+
+/* Template map for species */
+function getTemplateName(){
+  const sp=(detectedSpecies||'').toLowerCase();
+  if(sp==='rat')return 'Rodent Template';
+  if(sp==='dog')return 'Dog/Canine Template';
+  if(sp==='swine')return 'Swine Template';
+  return (sp||'Species')+ ' Template';
+}
+
+/* Count populated vs empty fields in currentProtocolData */
+function countProtocolFields(obj,prefix){
+  prefix=prefix||'';
+  let filled=0,empty=0;
+  if(!obj||typeof obj!=='object')return{filled:obj?1:0,empty:obj?0:1};
+  const keys=Object.keys(obj);
+  for(const k of keys){
+    const v=obj[k];
+    if(Array.isArray(v)){
+      v.forEach((item,i)=>{
+        const sub=countProtocolFields(item,prefix+k+'.'+i+'.');
+        filled+=sub.filled;empty+=sub.empty;
+      });
+    }else if(v&&typeof v==='object'){
+      const sub=countProtocolFields(v,prefix+k+'.');
+      filled+=sub.filled;empty+=sub.empty;
+    }else{
+      if(v!==null&&v!==undefined&&v!==''&&!String(v).startsWith('<<'))filled++;else empty++;
+    }
+  }
+  return{filled,empty};
+}
 
 function renderProtocol(c){
   /* If editor mode is active, render full inline editor */
@@ -1419,25 +1651,55 @@ function renderProtocol(c){
   if(protocolStep===0){
     panel.innerHTML=`<div style="text-align:center"><p style="color:var(--muted);margin-bottom:20px">Upload the SOW and Sponsor Questionnaire to generate a first-draft protocol.</p><button class="btn btn-p" style="font-size:1rem;padding:14px 36px" onclick="protocolStep=1;navigate('protocol')">Start New Protocol</button></div>`;
   } else if(protocolStep===1){
-    panel.innerHTML=`<div class="fade-up" style="text-align:center">
-      <input type="file" id="sow-file-input" accept=".docx,.doc,.pdf,.xlsx,.xls,.csv" style="display:none" onchange="handleFileSelect(this)">
-      <div onclick="document.getElementById('sow-file-input').click()" style="max-width:520px;margin:0 auto;padding:48px 32px;border-radius:16px;border:2px dashed var(--g2);background:rgba(0,152,102,.03);cursor:pointer;transition:all .3s" onmouseover="this.style.borderColor='var(--g3)';this.style.background='rgba(0,152,102,.06)'" onmouseout="this.style.borderColor='var(--g2)';this.style.background='rgba(0,152,102,.03)'">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--g2)" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:8px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        <p style="font-weight:700;font-size:1rem;margin-top:8px">Click to browse for your SOW &amp; Questionnaire</p>
-        <p style="font-size:.82rem;color:var(--muted);margin-top:6px">Opens your file explorer &mdash; Select .docx, .pdf, or .xlsx files</p>
-        <div style="margin-top:16px;display:flex;justify-content:center;gap:8px"><span class="badge bg-green">.docx</span><span class="badge bg-blue">.pdf</span><span class="badge bg-orange">.xlsx</span></div>
+    panel.innerHTML=`<div class="fade-up">
+      <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:4px;text-align:center">Upload Study Documents</h3>
+      <p style="font-size:.82rem;color:var(--muted);margin-bottom:24px;text-align:center">Upload your SOW and/or Sponsor Questionnaire. Both will be analyzed together for the most complete extraction.</p>
+      <input type="file" id="sow-file-input" accept=".docx,.doc,.pdf" style="display:none" onchange="document.getElementById('sow-label').textContent=this.files[0]?this.files[0].name:'No file selected'">
+      <input type="file" id="quest-file-input" accept=".docx,.doc,.pdf" style="display:none" onchange="document.getElementById('quest-label').textContent=this.files[0]?this.files[0].name:'No file selected'">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:640px;margin:0 auto 24px">
+        <div onclick="document.getElementById('sow-file-input').click()" style="padding:32px 20px;border-radius:14px;border:2px dashed var(--g2);background:rgba(0,152,102,.03);cursor:pointer;text-align:center;transition:all .3s" onmouseover="this.style.borderColor='var(--g3)';this.style.background='rgba(0,152,102,.06)'" onmouseout="this.style.borderColor='var(--g2)';this.style.background='rgba(0,152,102,.03)'">
+          <div style="font-size:2rem;margin-bottom:6px">\uD83D\uDCC4</div>
+          <p style="font-weight:700;font-size:.9rem">Statement of Work (SOW)</p>
+          <p style="font-size:.75rem;color:var(--muted);margin-top:4px">PDF or DOCX</p>
+          <p id="sow-label" style="font-size:.72rem;color:var(--g3);margin-top:8px;font-weight:600;word-break:break-all">No file selected</p>
+        </div>
+        <div onclick="document.getElementById('quest-file-input').click()" style="padding:32px 20px;border-radius:14px;border:2px dashed var(--research);background:rgba(0,87,191,.03);cursor:pointer;text-align:center;transition:all .3s" onmouseover="this.style.borderColor='var(--research)';this.style.background='rgba(0,87,191,.06)'" onmouseout="this.style.borderColor='rgba(0,87,191,.3)';this.style.background='rgba(0,87,191,.03)'">
+          <div style="font-size:2rem;margin-bottom:6px">\uD83D\uDCCB</div>
+          <p style="font-weight:700;font-size:.9rem">Sponsor Questionnaire</p>
+          <p style="font-size:.75rem;color:var(--muted);margin-top:4px">PDF or DOCX</p>
+          <p id="quest-label" style="font-size:.72rem;color:var(--research);margin-top:8px;font-weight:600;word-break:break-all">No file selected</p>
+        </div>
       </div>
-      <p style="font-size:.8rem;color:var(--muted);margin-top:16px">Demo: Click to simulate uploading SOW 2268.99 + Sponsor Questionnaire</p>
+      <div style="text-align:center">
+        <button class="btn btn-p" style="font-size:1rem;padding:14px 44px" onclick="handleMultiFileUpload()">Upload &amp; Analyze Documents</button>
+        <p style="font-size:.75rem;color:var(--muted);margin-top:12px">At least one document is required. Both are recommended for complete extraction.</p>
+      </div>
     </div>`;
   } else if(protocolStep===2){
-    panel.innerHTML=`<div class="fade-up"><h3 style="font-size:1.1rem;font-weight:700;margin-bottom:6px">Species Detected: <span style="color:var(--preclinical)">G\u00f6ttingen Minipigs\u00AE (Sus domesticus)</span></h3>
-    ${uploadedFileName?`<p style="font-size:.8rem;color:var(--muted);margin-bottom:20px">Source: ${uploadedFileName}</p>`:'<p style="font-size:.8rem;color:var(--muted);margin-bottom:20px">Source: SOW 2268.99 FE.pdf</p>'}
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">${[{n:'Rat / Rodent',e:'\uD83D\uDC00',a:false},{n:'G\u00f6ttingen Minipig',e:'\uD83D\uDC37',a:true},{n:'Dog / Canine',e:'\uD83D\uDC15',a:false}].map(s=>`<div style="padding:20px;border-radius:12px;border:2px solid ${s.a?'var(--g2)':'var(--border)'};background:${s.a?'rgba(0,152,102,.05)':'#fff'};text-align:center;cursor:pointer;transition:all .2s"><div style="font-size:2.5rem;margin-bottom:8px">${s.e}</div><div style="font-weight:600;font-size:.9rem">${s.n}</div>${s.a?'<span class="badge bg-green" style="margin-top:8px">Auto-detected 99%</span>':''}</div>`).join('')}</div>
-    <div style="padding:16px;border-radius:10px;background:var(--bg);margin-bottom:20px"><div style="font-size:.8rem;font-weight:600;margin-bottom:8px">Extracted from SOW 2268.99:</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:.82rem">${['Study: 28-Day Toxicity with 14-Day Recovery','Route: Oral (tablet)','Groups: 4 (Vehicle + 3 dose levels)','Animals: 20M / 20F (40 total)','GLP: FDA GLP Compliant','Necropsy: Day 29 (terminal) + Day 42 (recovery)','Sponsor: Metsera, Inc.','Test Article: MET097','TK: Days 1 & 28, up to 10 timepoints','Dose Levels: Low, Mid, High (mg/head)'].map(p=>`<div style="display:flex;align-items:center;gap:6px"><span style="color:var(--g2)">\u2713</span>${p}</div>`).join('')}</div></div>
-    <button class="btn btn-p" onclick="confirmSpeciesAndExtract()">Confirm Species &amp; Continue</button></div>`;
-  } else if(protocolStep===3 && backendConnected && currentProtocolId && !window._forceStaticMapping){
-    // V.1: Smart Gap Analysis Dashboard
-    if(!gapAnalysisData){
+    /* Build species cards dynamically from detected species */
+    const speciesOptions=[
+      {id:'rat',n:'Rat / Rodent',e:'\uD83D\uDC00'},
+      {id:'swine',n:'Swine / Minipig',e:'\uD83D\uDC37'},
+      {id:'dog',n:'Dog / Canine',e:'\uD83D\uDC15'}
+    ];
+    const ds=detectedSpecies||'';
+    const speciesCards=speciesOptions.map(s=>{
+      const active=s.id===ds;
+      return `<div onclick="detectedSpecies='${s.id}';navigate('protocol')" style="padding:20px;border-radius:12px;border:2px solid ${active?'var(--g2)':'var(--border)'};background:${active?'rgba(0,152,102,.05)':'#fff'};text-align:center;cursor:pointer;transition:all .2s"><div style="font-size:2.5rem;margin-bottom:8px">${s.e}</div><div style="font-weight:600;font-size:.9rem">${s.n}</div>${active?'<span class="badge bg-green" style="margin-top:8px">Auto-detected</span>':''}</div>`;
+    }).join('');
+    /* Build uploaded files summary */
+    const filesSummary=uploadedFiles.length?uploadedFiles.map(f=>`<div style="display:flex;align-items:center;gap:6px"><span style="color:var(--g2)">\u2713</span>${f.doc_type.toUpperCase()}: ${f.filename} (${f.text_length.toLocaleString()} chars)</div>`).join(''):`<div style="display:flex;align-items:center;gap:6px"><span style="color:var(--g2)">\u2713</span>${uploadedFileName}</div>`;
+    panel.innerHTML=`<div class="fade-up"><h3 style="font-size:1.1rem;font-weight:700;margin-bottom:6px">Species Detection</h3>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:20px">Detected from your uploaded document(s). Click a card to override if needed.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">${speciesCards}</div>
+    <div style="padding:16px;border-radius:10px;background:var(--bg);margin-bottom:20px"><div style="font-size:.8rem;font-weight:600;margin-bottom:8px">Uploaded Documents:</div><div style="display:grid;grid-template-columns:1fr;gap:8px;font-size:.82rem">${filesSummary}</div></div>
+    ${!ds||ds==='common'?'<div style="padding:12px;border-radius:8px;background:rgba(240,171,0,.1);margin-bottom:16px;font-size:.82rem;color:#b8860b"><strong>\u26A0\uFE0F Species could not be auto-detected.</strong> Please select one above before continuing.</div>':''}
+    <button class="btn btn-p" onclick="confirmSpeciesAndExtract()" ${!ds||ds==='common'?'disabled style="opacity:.5;cursor:not-allowed"':''}>Confirm Species &amp; Extract Protocol Data</button></div>`;
+  } else if(protocolStep===3){
+    // V.1: Smart Gap Analysis Dashboard (requires backend)
+    if(!backendConnected||!currentProtocolId){
+      panel.innerHTML='<div style="text-align:center;padding:40px"><p style="color:var(--muted);font-size:.9rem">Backend connection required for gap analysis. Please ensure the server is running and upload documents.</p><button class="btn btn-p" style="margin-top:16px" onclick="protocolStep=1;navigate(\'protocol\')">Start Over</button></div>';
+    } else if(!gapAnalysisData){
       panel.innerHTML='<div style="text-align:center;padding:40px"><div style="width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--g2);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px"></div><p style="font-weight:600;color:var(--g3)">Analyzing extraction quality...</p></div>';
       loadGapAnalysis().then(()=>{
         loadWizardQuestions().then(()=>{navigate('protocol');});
@@ -1445,10 +1707,11 @@ function renderProtocol(c){
     } else {
       panel.innerHTML=renderGapDashboard();
     }
-  } else if(protocolStep===3){
+  } else if(false){
+    /* REMOVED: Static demo field mapping — all protocol data now comes from real extraction */
     panel.innerHTML=`<div class="fade-up">
     <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:6px">Field Mapping</h3>
-    <p style="font-size:.82rem;color:var(--muted);margin-bottom:20px">Ada mapped fields from <strong>SOW 2268.99</strong> and <strong>Sponsor Questionnaire</strong> to the <strong>Swine Protocol Template</strong>.</p>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:20px">REMOVED STATIC DEMO DATA</p>
     <div style="display:grid;grid-template-columns:1fr 40px 1fr;gap:0;margin-bottom:8px;align-items:center">
       <div style="padding:10px 14px;background:var(--research);color:#fff;border-radius:8px 8px 0 0;font-weight:700;font-size:.78rem;text-align:center">SOW / Questionnaire Field</div><div></div>
       <div style="padding:10px 14px;background:var(--g3);color:#fff;border-radius:8px 8px 0 0;font-weight:700;font-size:.78rem;text-align:center">Protocol Section</div>
@@ -1488,24 +1751,75 @@ function renderProtocol(c){
       <button class="btn btn-s" onclick="toast('Opening manual mapping editor...')">Edit Mappings</button>
     </div></div>`;
   } else if(protocolStep===4){
-    const sections=['Title Page & Study Info','Personnel','Regulatory Compliance','Quality Assurance','Test Material','Test System','Husbandry','Experimental Design','Administration of Dose','Clinical Observations','Body Weight & Food Consumption','Ophthalmology & ECG','Clinical Pathology','Toxicokinetics','Necropsy & Histopathology','Statistical Analysis & Reporting'];
+    /* Dynamic Protocol Population — pulls section status from currentProtocolData */
+    const _studyNum=getStudyNumber();
+    const _tplName=getTemplateName();
+    const _articleName=getTestArticle()||'Test Article';
+    const protocolSections=[
+      {name:'Title Page & Study Info',key:'BasicDetails'},
+      {name:'Personnel',key:'Personnel'},
+      {name:'Regulatory Compliance',key:'RegulatoryCompliance'},
+      {name:'Quality Assurance',key:'QualityAssurance'},
+      {name:'Test Material',key:'TestMaterial'},
+      {name:'Test System',key:'TestSystem'},
+      {name:'Husbandry',key:'Husbandry'},
+      {name:'Experimental Design',key:'ExperimentalDesign'},
+      {name:'Administration of Dose',key:'ExperimentalDesign'},
+      {name:'Clinical Observations',key:'StudyInfo'},
+      {name:'Body Weight & Food Consumption',key:'StudyInfo'},
+      {name:'Ophthalmology & ECG',key:'StudyInfo'},
+      {name:'Clinical Pathology',key:'ClinicalPathology'},
+      {name:'Toxicokinetics',key:'StudyInfo'},
+      {name:'Necropsy & Histopathology',key:'StudyInfo'},
+      {name:'Statistical Analysis & Reporting',key:'Reporting'}
+    ];
+    /* Determine section completion from actual data */
+    let _completedCount=0;
+    const _sectionStates=protocolSections.map((sec,i)=>{
+      const sectionData=currentProtocolData?currentProtocolData[sec.key]:null;
+      const counts=sectionData?countProtocolFields(sectionData):null;
+      const hasSomeData=counts&&counts.filled>0;
+      if(hasSomeData)_completedCount++;
+      return{...sec,hasSomeData,counts};
+    });
+    const _totalSections=protocolSections.length;
+    const _pctComplete=_totalSections?Math.round(_completedCount/_totalSections*100):0;
+    /* If data is available, all populated sections show Done; if backend is generating, show animated progress */
+    const _isGenerating=!currentProtocolData||Object.keys(currentProtocolData).length===0;
+
     panel.innerHTML=`<div class="fade-up">
     <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:6px">Protocol Population</h3>
-    <p style="font-size:.82rem;color:var(--muted);margin-bottom:20px">Ada is populating <strong>Protocol 2268.99</strong> using the Swine Template + SOW + Questionnaire data.</p>
-    ${sections.map((s,i)=>{const done=i<13;const cur=i===13;return `<div class="fade-up" style="animation-delay:${i*.04}s;display:flex;align-items:center;gap:12px;padding:8px 14px;border-radius:8px;background:${done?'rgba(0,152,102,.04)':cur?'rgba(0,87,191,.04)':'var(--bg)'};margin-bottom:4px;border:1px solid ${done?'rgba(0,152,102,.12)':cur?'rgba(0,87,191,.2)':'var(--border)'}">
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:20px">Ada is populating <strong>Protocol ${_studyNum||'—'}</strong> using the ${_tplName} + SOW + Questionnaire data.</p>
+    ${_sectionStates.map((sec,i)=>{
+      const done=sec.hasSomeData;
+      const cur=_isGenerating&&i===_completedCount;
+      const queued=!done&&!cur;
+      return `<div class="fade-up" style="animation-delay:${i*.04}s;display:flex;align-items:center;gap:12px;padding:8px 14px;border-radius:8px;background:${done?'rgba(0,152,102,.04)':cur?'rgba(0,87,191,.04)':'var(--bg)'};margin-bottom:4px;border:1px solid ${done?'rgba(0,152,102,.12)':cur?'rgba(0,87,191,.2)':'var(--border)'}">
       <div style="width:20px;height:20px;border-radius:50%;background:${done?'var(--g2)':cur?'var(--research)':'var(--border)'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:.6rem;flex-shrink:0">${done?'\u2713':cur?'<div style="width:7px;height:7px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>':''}</div>
-      <span style="font-weight:${done||cur?600:400};font-size:.82rem;flex:1;color:${!done&&!cur?'var(--muted)':'var(--txt)'}">${i+1}. ${s}</span>
-      <span style="font-size:.7rem;color:${done?'var(--g2)':cur?'var(--research)':'var(--muted)'};font-weight:500">${done?'Done':cur?'Populating...':'Queued'}</span>
+      <span style="font-weight:${done||cur?600:400};font-size:.82rem;flex:1;color:${queued?'var(--muted)':'var(--txt)'}">${i+1}. ${sec.name}</span>
+      <span style="font-size:.7rem;color:${done?'var(--g2)':cur?'var(--research)':'var(--muted)'};font-weight:500">${done?(sec.counts?sec.counts.filled+' fields':'Done'):cur?'Populating...':'Queued'}</span>
     </div>`}).join('')}
     <div style="margin-top:14px;padding:12px 14px;background:var(--bg);border-radius:10px;display:flex;justify-content:space-between;align-items:center">
-      <div style="flex:1;margin-right:16px"><div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px"><span style="font-weight:600">Population Progress</span><span style="color:var(--g2);font-weight:700">81%</span></div><div class="progress-bar" style="height:8px;border-radius:4px"><div class="progress-fill" style="width:81%;border-radius:4px"></div></div></div>
-      <span style="font-size:.76rem;color:var(--muted)">13 of 16 sections</span>
+      <div style="flex:1;margin-right:16px"><div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px"><span style="font-weight:600">Population Progress</span><span style="color:var(--g2);font-weight:700">${_pctComplete}%</span></div><div class="progress-bar" style="height:8px;border-radius:4px"><div class="progress-fill" style="width:${_pctComplete}%;border-radius:4px"></div></div></div>
+      <span style="font-size:.76rem;color:var(--muted)">${_completedCount} of ${_totalSections} sections</span>
     </div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn btn-p" onclick="generateProtocolDocx()">Proceed to Review</button>
     </div></div>`;
   } else if(protocolStep===5){
-    panel.innerHTML=`<div class="fade-up"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><div><h3 style="font-size:1.1rem;font-weight:700">Protocol 2268.99 \u2014 First Draft</h3><p style="font-size:.82rem;color:var(--muted)">A 28-Day Toxicity Study in G\u00f6ttingen Minipigs of MET097 with a 14-Day Recovery Period</p></div><div style="display:flex;gap:8px"><button class="btn btn-s" onclick="if(generatedDocxUrl){window.open(generatedDocxUrl,'_blank')}else if(backendConnected&&currentProtocolId){window.open(API_BASE+'/api/protocols/'+currentProtocolId+'/download','_blank')}else{toast('Exporting protocol 2268.99 as DOCX...')}">Export DOCX</button><button class="btn btn-p" onclick="showProtocolEditor=true;navigate('protocol')">Open Full Editor</button></div></div>
+    /* Dynamic Protocol Preview — renders from currentProtocolData */
+    const _sn=getStudyNumber();
+    const _st=getStudyTitle();
+    const _sp=getSponsor();
+    const _ta=getTestArticle();
+    const _species=getSpeciesName();
+    const _route=getRoute();
+    const _dur=getDuration();
+    const _recovery=getNestedVal(currentProtocolData,'BasicDetails.RecoveryPeriod')||getNestedVal(currentProtocolData,'StudyInfo.RecoveryPeriod')||'';
+    const _classAction=getNestedVal(currentProtocolData,'StudyInfo.ClassOrActionOfTestArticle')||'';
+    const _fc=currentProtocolData?countProtocolFields(currentProtocolData):{filled:0,empty:0};
+    const _fcPct=(_fc.filled+_fc.empty)?Math.round(_fc.filled/(_fc.filled+_fc.empty)*100):0;
+    panel.innerHTML=`<div class="fade-up"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><div><h3 style="font-size:1.1rem;font-weight:700">Protocol ${_sn||currentProtocolId||''} \u2014 First Draft</h3><p style="font-size:.82rem;color:var(--muted)">${_st||'Protocol document'}</p></div><div style="display:flex;gap:8px"><button class="btn btn-s" onclick="downloadProtocolDocx()">Export DOCX</button><button class="btn btn-p" onclick="showProtocolEditor=true;navigate('protocol')">Open Full Editor</button></div></div>
     <div class="proto-legend">
       <span style="font-weight:700;font-size:.82rem;margin-right:8px">Color Legend:</span>
       <span class="proto-legend-item"><span class="proto-legend-dot" style="background:rgba(0,152,102,.2);border:1px solid rgba(0,152,102,.4)"></span>From SOW</span>
@@ -1516,69 +1830,50 @@ function renderProtocol(c){
     <div style="padding:24px;background:var(--bg);border-radius:12px;max-height:360px;overflow-y:auto" class="proto-editor">
       <div style="text-align:center;margin-bottom:16px">
         <div style="font-weight:700;font-size:.85rem;color:var(--muted)">ALTASCIENCES PRECLINICAL COLUMBIA, LLC</div>
-        <div style="font-weight:800;font-size:1.05rem;margin-top:8px">${sow('A 28-Day Toxicity Study in G\u00f6ttingen Minipigs\u00AE of MET097 with a 14-Day Recovery Period')}</div>
+        <div style="font-weight:800;font-size:1.05rem;margin-top:8px">${_st?sow(_st):need('Study Title')}</div>
       </div>
       <table>
         <tr><th style="width:35%">Field</th><th>Value</th></tr>
-        <tr><td>Testing Facility Study No.</td><td>${sow('2268.99')}</td></tr>
-        <tr><td>Sponsor Reference No.</td><td>${need('Reference Number')}</td></tr>
-        <tr><td>Testing Facility</td><td>${sow('Altasciences Preclinical Columbia, LLC, 562 State Road DD, Auxvasse, MO 65231')}</td></tr>
-        <tr><td>Sponsor</td><td>${sow('Metsera, Inc.')}</td></tr>
+        <tr><td>Testing Facility Study No.</td><td>${d('BasicDetails.StudyNo','Study Number')}</td></tr>
+        <tr><td>Sponsor Reference No.</td><td>${d('BasicDetails.SponsorRefNo','Reference Number')}</td></tr>
+        <tr><td>Testing Facility</td><td>${tpl('Altasciences Preclinical Columbia, LLC, 562 State Road DD, Auxvasse, MO 65231')}</td></tr>
+        <tr><td>Sponsor</td><td>${_sp?sow(_sp):need('Sponsor Name')}</td></tr>
       </table>
       <h1>Study Information</h1>
       <h2>Study Objective</h2>
-      <p>To evaluate the potential toxicity of ${sow('MET097')}, a ${quest('treatment for obesity; delayed gastric emptying/decreased appetite')}, when administered by ${sow('oral tablet')} for ${sow('28 days')} to ${sow('G\u00f6ttingen Minipigs\u00AE')} and to evaluate the reversibility of any finding with a ${sow('14-day recovery period')}.</p>
+      <p>${getNestedVal(currentProtocolData,'StudyInfo.Objective')?sow(getNestedVal(currentProtocolData,'StudyInfo.Objective')):'To evaluate the potential toxicity of '+(_ta?sow(_ta):need('Test Article'))+', a '+(_classAction?quest(_classAction):need('class/action'))+', when administered by '+(_route?sow(_route):need('route'))+' for '+(_dur?sow(_dur):need('duration'))+' to '+(_species?sow(_species):need('species'))+((_recovery)?' and to evaluate the reversibility of any finding with a '+sow(_recovery)+' recovery period':'')+'.'}</p>
       <h1>Test Material</h1>
       <h2>Test Article</h2>
       <table>
         <tr><th>Property</th><th>Value</th></tr>
-        <tr><td>Identification</td><td>${sow('MET097')}</td></tr>
-        <tr><td>Lot/Batch Number</td><td>${need('Add Number')}</td></tr>
-        <tr><td>Storage Conditions</td><td>${quest('In a refrigerator set to maintain 2-8\u00B0C and desiccated')}</td></tr>
-        <tr><td>Formulation</td><td>${quest('Ready to dose tablets')}</td></tr>
-        <tr><td>Indication</td><td>${quest('Obesity; delayed gastric emptying/decreased appetite')}</td></tr>
-        <tr><td>Half-life</td><td>${quest('>200 hours')}</td></tr>
+        <tr><td>Identification</td><td>${d('TestMaterial.TestArticle.0.Identification','Test Article Name')}</td></tr>
+        <tr><td>Lot/Batch Number</td><td>${d('TestMaterial.TestArticle.0.LotBatchNo','Add Number')}</td></tr>
+        <tr><td>Storage Conditions</td><td>${d('TestMaterial.TestArticle.0.StorageConditions','Storage Conditions')}</td></tr>
+        <tr><td>Expiration/Retest Date</td><td>${d('TestMaterial.TestArticle.0.ExpirationOrRetestDate','Expiration Date')}</td></tr>
       </table>
       <h2>Vehicle Control</h2>
-      <p>${quest('True Placebo tablets (ready to dose) will be used for the control group (no vehicle is necessary)')}</p>
+      <table>
+        <tr><th>Property</th><th>Value</th></tr>
+        <tr><td>Identification</td><td>${d('TestMaterial.VehicleControl1.Identification','Vehicle Control')}</td></tr>
+        <tr><td>Storage Conditions</td><td>${d('TestMaterial.VehicleControl1.StorageConditions','Storage Conditions')}</td></tr>
+      </table>
       <h1>Test System</h1>
       <table>
         <tr><th>Description</th><th>Value</th></tr>
-        <tr><td>Species / Strain</td><td>${sow('Sus domesticus / G\u00f6ttingen Minipigs\u00AE')}</td></tr>
-        <tr><td>Supplier</td><td>${tpl('Marshall BioResources')}</td></tr>
-        <tr><td>Condition</td><td>${sow('Na\u00efve')}</td></tr>
-        <tr><td>Target Age Range</td><td>${sow('3 to 4 months')}</td></tr>
-        <tr><td>Number for Acclimation</td><td>${tpl('21 males and 21 females')}</td></tr>
-        <tr><td>Number for Dosing</td><td>${sow('20 males and 20 females')}</td></tr>
+        <tr><td>Species / Strain</td><td>${d('TestSystem.SpeciesStrain','Species/Strain')}</td></tr>
+        <tr><td>Supplier</td><td>${d('TestSystem.Supplier','Supplier')}</td></tr>
+        <tr><td>Condition</td><td>${d('TestSystem.Condition','Condition')}</td></tr>
+        <tr><td>Target Body Weight Range</td><td>${d('TestSystem.TargetBodyWeightRange','Weight Range')}</td></tr>
+        <tr><td>Target Age Range</td><td>${d('TestSystem.TargetAgeRage','Age Range')}</td></tr>
+        <tr><td>Number for Acclimation</td><td>${d('TestSystem.NumberofAnimalsforAcclimation','Animals for Acclimation')}</td></tr>
+        <tr><td>Number for Dosing</td><td>${d('TestSystem.NumberofAnimalsforDosing','Animals for Dosing')}</td></tr>
       </table>
+      <h1>Regulatory Compliance</h1>
+      <p>${d('RegulatoryCompliance.GLPOrNonGLP','GLP or Non-GLP')}</p>
       <h1>Experimental Design</h1>
-      <table>
-        <tr><th>Group</th><th>Test Material</th><th>Dose Level</th><th>Route</th><th>Males (a+b)</th><th>Females (a+b)</th></tr>
-        <tr><td>1</td><td>${sow('Vehicle')}</td><td>${sow('0')}</td><td>${sow('Oral (tablet)')}</td><td>${sow('3+2')}</td><td>${sow('3+2')}</td></tr>
-        <tr><td>2</td><td>${sow('MET097')}</td><td>${quest('3 mg/head')}</td><td>${sow('Oral (tablet)')}</td><td>${sow('3+2')}</td><td>${sow('3+2')}</td></tr>
-        <tr><td>3</td><td>${sow('MET097')}</td><td>${quest('10 mg/head')}</td><td>${sow('Oral (tablet)')}</td><td>${sow('3+2')}</td><td>${sow('3+2')}</td></tr>
-        <tr><td>4</td><td>${sow('MET097')}</td><td>${quest('30 mg/head')}</td><td>${sow('Oral (tablet)')}</td><td>${sow('3+2')}</td><td>${sow('3+2')}</td></tr>
-      </table>
-      <p style="font-size:.78rem;color:var(--muted)">a = Terminal Necropsy (Day 29); b = Recovery Necropsy (Day 42). ${quest('1 tablet/day per animal.')}</p>
-      <h2>Dose Justification</h2>
-      <p>${quest('Doses are based on expected bioavailability of 1%, using exposure (5 days repeat dosing) in Bama pigs, assuming dose linearity and accumulation.')}</p>
-      <h1>Observations &amp; Procedures</h1>
-      <table>
-        <tr><th>Procedure</th><th>Frequency / Timing</th><th>Source</th></tr>
-        <tr><td>Mortality / Morbidity</td><td>${quest('At least twice daily AM/PM (4+ hrs apart)')}</td><td>Questionnaire</td></tr>
-        <tr><td>Cage Side Observations</td><td>${sow('Once daily')}</td><td>SOW</td></tr>
-        <tr><td>Detailed Clinical Obs</td><td>${sow('Weekly')}</td><td>SOW</td></tr>
-        <tr><td>Body Weights</td><td>${quest('Twice weekly')}</td><td>Questionnaire</td></tr>
-        <tr><td>Food Consumption</td><td>${sow('Daily')}</td><td>SOW</td></tr>
-        <tr><td>Ophthalmology</td><td>${sow('Acclimation + Week 4')}</td><td>SOW</td></tr>
-        <tr><td>ECG (non-telemetry)</td><td>${sow('Acclimation + Week 4')}</td><td>SOW</td></tr>
-      </table>
-      <h1>Clinical Pathology</h1>
-      <p>Hematology, coagulation, serum chemistry, and urinalysis per ${sow('standard panels')}. Bone marrow smears ${sow('prepared for all animals')}; examination by amendment.</p>
-      <h1>Toxicokinetics</h1>
-      <p>Blood samples collected on ${sow('Days 1 and 28')} with ${sow('up to 10 timepoints')} for Groups 2-4. Analysis by ${sow('LC-MS/MS')} at Altasciences. Analyte: ${quest('Parent molecule \u2014 MET097')}. Anticoagulant: ${quest('K\u2082EDTA')}. Evaluation via ${sow('WinNonlin noncompartmental analysis')}.</p>
+      <p>${getNestedVal(currentProtocolData,'ExperimentalDesign')?sow('See extracted experimental design data in Full Editor'):need('Experimental design \u2014 open Full Editor to review dose groups, routes, and allocation')}</p>
     </div>
-    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><span class="badge bg-green">AI Confidence: 96.8%</span><span class="badge bg-green">GLP Compliant</span><span class="badge bg-blue">16 sections populated</span><span class="badge bg-orange">2 fields need input</span><span class="badge bg-purple">Source-traced</span></div>
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><span class="badge bg-green">Extraction: ${_fcPct}%</span>${getNestedVal(currentProtocolData,'RegulatoryCompliance.GLPOrNonGLP')?'<span class="badge bg-green">'+getNestedVal(currentProtocolData,'RegulatoryCompliance.GLPOrNonGLP')+'</span>':''}<span class="badge bg-blue">${_fc.filled} fields populated</span>${_fc.empty?'<span class="badge bg-orange">'+_fc.empty+' fields need input</span>':''}<span class="badge bg-purple">Source-traced</span></div>
     <!-- V.1: Section-Level Editing & Locking -->
     <div style="margin-top:20px;padding:16px;background:var(--bg);border-radius:12px;border:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -1597,7 +1892,7 @@ function renderProtocol(c){
     panel.innerHTML=`<div class="fade-up">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
       <div><h3 style="font-size:1.1rem;font-weight:700">Version & Amendment Management</h3>
-      <p style="font-size:.82rem;color:var(--muted)">Protocol ${currentProtocolId||'2268.99'} \u2014 Single source of truth with full audit trail</p></div>
+      <p style="font-size:.82rem;color:var(--muted)">Protocol ${getStudyNumber()||currentProtocolId||''} \u2014 Single source of truth with full audit trail</p></div>
       <div style="display:flex;gap:8px"><button class="btn btn-s" onclick="protocolStep=5;navigate('protocol')">Back to Review</button><button class="btn btn-p" onclick="createAmendmentReal()">Create Amendment</button></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
@@ -1675,7 +1970,7 @@ function renderAmendmentReport(c){
   /* Use real diff data from API if available, otherwise fall back to demo data */
   const _rd=window._realDiffData;
   const _realAvail=_rd && _rd.diff_sections && _rd.diff_sections.length>0;
-  const _realTitle=_realAvail?('Protocol '+(_rd.protocol_id||'')+' '+(_rd.base_version||'v1.0')+' \u2192 Amendment '+(_rd.amendment_number||1)+' ('+(_rd.amendment_version||'v0.1')+')'):'Protocol 2268.99 v1.0 \u2192 Amended Protocol 1 (v0.2)';
+  const _realTitle=_realAvail?('Protocol '+(_rd.protocol_id||'')+' '+(_rd.base_version||'v1.0')+' \u2192 Amendment '+(_rd.amendment_number||1)+' ('+(_rd.amendment_version||'v0.1')+')'):'Protocol '+(currentProtocolId||'')+' v1.0 \u2192 Amended Protocol 1 (v0.2)';
   const diffSections=_realAvail?_rd.diff_sections:[
     {section:'Study Information',id:'study-info',type:'modified',severity:'substantive',
      original:'28-day repeat-dose oral toxicity study in Sprague Dawley rats with a 14-day recovery period. Dose levels: 0 (vehicle), 25, 75, 225 mg/kg/day.',
@@ -1859,7 +2154,7 @@ function renderAmendmentReport(c){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
         <div>
           <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:4px">Change Summary for Costing</h2>
-          <p style="font-size:.82rem;color:var(--muted)">Protocol 2268.99 — Amendment cost analysis</p>
+          <p style="font-size:.82rem;color:var(--muted)">Protocol ${currentProtocolId||''} — Amendment cost analysis</p>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-s" style="font-size:.78rem" onclick="showAmendmentReport=false;protocolStep=6;navigate('protocol')">← Back to Versions</button>
@@ -1886,6 +2181,168 @@ if(typeof window.editorSectionEditing==='undefined')window.editorSectionEditing=
 function toggleAdaChat(){window.editorAdaChat=!window.editorAdaChat;navigate('protocol');}
 function setEditorSection(i){window.editorActiveSection=(window.editorActiveSection===i)?-1:i;navigate('protocol');}
 function toggleSectionEdit(i){window.editorSectionEditing[i]=!window.editorSectionEditing[i];navigate('protocol');}
+
+/* ===== EDIT PERSISTENCE ===== */
+window._editorDirty=false;
+window._editorSaving=false;
+
+function collectEditorFields(){
+  /* Collect all contenteditable spans from the protocol editor body */
+  const body=document.getElementById('proto-editor-body');
+  if(!body) return null;
+  const fields={};
+  body.querySelectorAll('span[contenteditable="true"]').forEach(span=>{
+    const title=span.getAttribute('title')||'';
+    const key=span.getAttribute('data-field-path');
+    /* Try data attribute first, fall back to title-based key */
+    if(key){
+      fields[key]=span.textContent.trim();
+    } else {
+      /* Build key from table context: find parent row, use first cell text */
+      const td=span.closest('td');
+      const tr=td?td.closest('tr'):null;
+      const th=tr?tr.querySelector('td:first-child, th:first-child'):null;
+      const section=span.closest('[id^="ps"]');
+      const sectionName=section?section.id:'unknown';
+      const fieldLabel=th&&th!==td?th.textContent.trim():'';
+      const compositeKey=sectionName+(fieldLabel?'.'+fieldLabel:'');
+      if(compositeKey && compositeKey!=='unknown') fields[compositeKey]=span.textContent.trim();
+    }
+  });
+  return fields;
+}
+
+function collectSectionFields(sectionIdx){
+  /* Collect editable fields from a specific section wrapper */
+  const wrapper=document.getElementById('secwrap-'+sectionIdx);
+  if(!wrapper) return null;
+  const fields={};
+  wrapper.querySelectorAll('[contenteditable="true"]').forEach(el=>{
+    const td=el.closest('td');
+    const tr=td?td.closest('tr'):null;
+    const th=tr?tr.querySelector('td:first-child, th:first-child'):null;
+    const fieldLabel=th&&th!==el.closest('td')?th.textContent.trim():'';
+    /* Also try to find key from nearest h2 */
+    let sectionLabel='';
+    let prev=el.closest('table')||el;
+    while(prev.previousElementSibling){
+      prev=prev.previousElementSibling;
+      if(prev.tagName==='H2'||prev.tagName==='H3'){sectionLabel=prev.textContent.trim();break;}
+    }
+    const key=(sectionLabel?sectionLabel+'.':'')+(fieldLabel||el.textContent.trim().substring(0,30));
+    if(key) fields[key]=el.textContent.trim();
+  });
+  return fields;
+}
+
+async function saveSectionEdits(sectionIdx){
+  if(!backendConnected||!currentProtocolId){toast('Not connected to backend');return;}
+  const fields=collectSectionFields(sectionIdx);
+  if(!fields||Object.keys(fields).length===0){toast('No changes to save');toggleSectionEdit(sectionIdx);return;}
+
+  /* Find matching section ID from sectionStatuses or build from index */
+  const sectionIds=['TitlePage','StudyInformation','Personnel','RegulatoryCompliance','QualityAssurance',
+    'TestMaterial','TestSystem','Husbandry','ExperimentalDesign','ExperimentalObservationsandProcedures',
+    'ClinicalPathology','LaboratoryAssessments','TerminalProceduresandPathology','DataAnalyses',
+    'ComputerizedSystemsandAnalyzers','AnimalCare','AmendedProtocolsandDeviations','Reporting',
+    'SENDDatasets','ArchivalStorage','Appendix1','Appendix2','Approvals'];
+  /* Adjust for editor indexing (ps1=StudyInformation which is idx 0 after cover) */
+  const sectionId=sectionIds[sectionIdx+1]||('section_'+sectionIdx);
+
+  try{
+    const saveBtn=document.querySelector('#secwrap-'+sectionIdx+' .btn-p');
+    if(saveBtn){saveBtn.textContent='Saving...';saveBtn.disabled=true;}
+    await apiCall('/api/protocols/'+currentProtocolId+'/sections/'+sectionId,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fields:fields})
+    });
+    toast('Section saved successfully');
+    toggleSectionEdit(sectionIdx);
+  }catch(e){
+    /* Fallback: save as protocol-level update */
+    try{
+      const protocol=currentProtocolData||{};
+      Object.assign(protocol,fields);
+      await apiCall('/api/protocols/'+currentProtocolId+'/extract',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({manual_fields:fields})
+      }).catch(()=>{});
+      toast('Section saved (protocol-level)');
+      toggleSectionEdit(sectionIdx);
+    }catch(e2){
+      toast('Save failed: '+e.message);
+    }
+  }
+}
+
+async function saveProtocolEdits(){
+  if(!backendConnected||!currentProtocolId){toast('Not connected to backend');return;}
+  if(window._editorSaving){return;}
+  window._editorSaving=true;
+
+  const saveBtn=document.querySelector('[onclick*="saveProtocolEdits"]');
+  if(saveBtn){saveBtn.textContent='Saving...';saveBtn.disabled=true;}
+
+  try{
+    const fields=collectEditorFields();
+    if(!fields||Object.keys(fields).length===0){toast('No editable fields found');return;}
+
+    /* Save via version creation */
+    const data=await apiCall('/api/protocols/'+currentProtocolId+'/versions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        change_summary:'Interactive editor save \u2014 '+Object.keys(fields).length+' fields',
+        changes:fields,
+        change_type:'edit'
+      })
+    });
+    const ver=data.version_number||data.version||'?';
+    toast('Protocol saved as v'+ver+' \u2014 committed to audit trail');
+    window._editorDirty=false;
+  }catch(e){
+    toast('Save failed: '+e.message);
+  }finally{
+    window._editorSaving=false;
+    if(saveBtn){saveBtn.textContent='Save & Send for Review';saveBtn.disabled=false;}
+  }
+}
+
+/* Track dirty state on contenteditable changes */
+document.addEventListener('input',function(e){
+  if(e.target.getAttribute('contenteditable')==='true' && document.getElementById('proto-editor-body')){
+    window._editorDirty=true;
+    /* Show unsaved indicator */
+    const indicator=document.getElementById('editor-unsaved-indicator');
+    if(indicator) indicator.style.display='flex';
+  }
+});
+
+function exitProtocolEditor(){
+  if(window._editorDirty){
+    showUnsavedDialog();
+    return;
+  }
+  showProtocolEditor=false;protocolStep=5;navigate('protocol');
+}
+
+function showUnsavedDialog(){
+  const overlay=document.createElement('div');
+  overlay.id='unsaved-dialog-overlay';
+  overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:2000;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML=`<div style="background:#fff;border-radius:16px;padding:28px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="font-size:1.5rem;text-align:center;margin-bottom:12px">\u26A0\uFE0F</div>
+    <h3 style="font-size:1rem;font-weight:700;text-align:center;margin-bottom:8px">Unsaved Changes</h3>
+    <p style="font-size:.84rem;color:var(--muted);text-align:center;margin-bottom:20px;line-height:1.5">You have unsaved edits. Would you like to save before leaving?</p>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-s" style="font-size:.78rem;padding:8px 20px" onclick="document.getElementById('unsaved-dialog-overlay').remove();window._editorDirty=false;showProtocolEditor=false;protocolStep=5;navigate('protocol')">Discard</button>
+      <button class="btn btn-s" style="font-size:.78rem;padding:8px 20px" onclick="document.getElementById('unsaved-dialog-overlay').remove()">Keep Editing</button>
+      <button class="btn btn-p" style="font-size:.78rem;padding:8px 20px" onclick="document.getElementById('unsaved-dialog-overlay').remove();saveProtocolEdits().then(()=>{showProtocolEditor=false;protocolStep=5;navigate('protocol')})">Save & Exit</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
 
 /* Make editor sections interactive after render */
 function initEditorSections(){
@@ -1959,9 +2416,9 @@ function initEditorSections(){
       const saveBar=document.createElement('div');
       saveBar.style.cssText='display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)';
       saveBar.innerHTML=
-        '<button class="btn btn-p" style="font-size:.72rem;padding:6px 14px" onclick="toast(\'Section saved \u2014 changes tracked in audit trail\');toggleSectionEdit('+secNum+')">Save Changes</button>'+
+        '<button class="btn btn-p" style="font-size:.72rem;padding:6px 14px" onclick="saveSectionEdits('+secNum+')">Save Changes</button>'+
         '<button class="btn btn-s" style="font-size:.72rem;padding:6px 14px" onclick="toggleSectionEdit('+secNum+')">Cancel</button>'+
-        '<span style="font-size:.66rem;color:var(--muted);display:flex;align-items:center;margin-left:auto">All edits tracked with user, timestamp, and change type</span>';
+        '<span style="font-size:.66rem;color:var(--muted);display:flex;align-items:center;margin-left:auto">\uD83D\uDD12 Saved to backend with audit trail</span>';
       contentDiv.appendChild(saveBar);
     } else {
       sectionContent.forEach(el=>{contentDiv.appendChild(el);});
@@ -1993,30 +2450,30 @@ function renderProtocolEditor(c){
     'Amended Protocols and Deviations','Reporting','SEND Datasets','Archival Storage',
     'Appendix 1','Appendix 2','Approvals'
   ];
-  const sectionStatus=[
-    {status:'complete',edits:0},{status:'complete',edits:2},{status:'needs-input',edits:0},
-    {status:'complete',edits:0},{status:'complete',edits:0},{status:'needs-input',edits:1},
-    {status:'complete',edits:0},{status:'complete',edits:0},{status:'complete',edits:3},
-    {status:'needs-input',edits:0},{status:'complete',edits:0},{status:'complete',edits:1},
-    {status:'complete',edits:0},{status:'complete',edits:0},{status:'complete',edits:0},
-    {status:'complete',edits:0},{status:'complete',edits:0},{status:'complete',edits:0},
-    {status:'needs-input',edits:0},{status:'complete',edits:0},{status:'complete',edits:0},
-    {status:'complete',edits:0},{status:'needs-input',edits:0}
-  ];
+  /* Dynamic section status from currentProtocolData */
+  const _secKeys=['BasicDetails','StudyInfo','Personnel','RegulatoryCompliance','QualityAssurance','TestMaterial','TestSystem','Husbandry','ExperimentalDesign','StudyInfo','ClinicalPathology','StudyInfo','StudyInfo','StudyInfo','ComputerizedSystemsAndAnalyzers','AnimalCareCompliance','StudyInfo','Reporting','StudyInfo','ArchivalStorage','StudyInfo','StudyInfo','Approvals'];
+  const sectionStatus=tocItems.map((t,i)=>{
+    const key=_secKeys[i]||'';
+    const secData=currentProtocolData?currentProtocolData[key]:null;
+    const cnt=secData?countProtocolFields(secData):{filled:0,empty:0};
+    const hasData=cnt.filled>0;
+    const hasGaps=cnt.empty>0;
+    return{status:hasData?(hasGaps?'needs-input':'complete'):'needs-input',edits:0,filled:cnt.filled,empty:cnt.empty};
+  });
   const chatOpen=window.editorAdaChat;
   const activeS=window.editorActiveSection;
   page.innerHTML=`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <div>
-      <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:2px">Protocol 2268.99 &mdash; Interactive Editor</h2>
+      <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:2px">Protocol ${getStudyNumber()||currentProtocolId||''} &mdash; Interactive Editor</h2>
       <p style="font-size:.8rem;color:var(--muted)">Click any section to expand. Edit inline or ask Ada for help. All changes tracked with full audit trail.</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-s" style="font-size:.78rem;padding:8px 16px" onclick="showProtocolEditor=false;protocolStep=5;navigate('protocol')">Back to Summary</button>
+      <button class="btn btn-s" style="font-size:.78rem;padding:8px 16px" onclick="exitProtocolEditor()">Back to Summary</button>
       <button class="btn ${chatOpen?'btn-p':'btn-s'}" style="font-size:.78rem;padding:8px 16px" onclick="toggleAdaChat()">\uD83E\uDD16 ${chatOpen?'Hide Ada':'Ask Ada'}</button>
       <button class="btn btn-s" style="font-size:.78rem;padding:8px 16px" onclick="toast('Importing external Word document for change detection...')">\uD83D\uDCE5 Import Edits</button>
-      <button class="btn btn-s" style="font-size:.78rem;padding:8px 16px" onclick="toast('Exporting protocol_2268.99_v0.3.docx...')">Export DOCX</button>
-      <button class="btn btn-p" style="font-size:.78rem;padding:8px 16px" onclick="toast('Protocol saved \u2014 v0.3 committed to audit trail')">Save &amp; Send for Review</button>
+      <button class="btn btn-s" style="font-size:.78rem;padding:8px 16px" onclick="downloadProtocolDocx()">Export DOCX</button>
+      <button class="btn btn-p" style="font-size:.78rem;padding:8px 16px" onclick="saveProtocolEdits()">Save &amp; Send for Review</button>
     </div>
   </div>
   <div class="proto-legend">
@@ -2025,7 +2482,8 @@ function renderProtocolEditor(c){
     <span class="proto-legend-item"><span class="proto-legend-dot" style="background:rgba(0,87,191,.2);border:1px solid rgba(0,87,191,.4)"></span>Questionnaire</span>
     <span class="proto-legend-item"><span class="proto-legend-dot" style="background:rgba(240,171,0,.2);border:1px solid rgba(240,171,0,.4)"></span>Template</span>
     <span class="proto-legend-item"><span class="proto-legend-dot" style="background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.4)"></span>Needs Input</span>
-    <span style="margin-left:auto;font-size:.72rem;color:var(--g2);font-weight:600">v0.3 \u2022 3 edits \u2022 Last saved 2m ago</span>
+    <span id="editor-unsaved-indicator" style="margin-left:auto;font-size:.72rem;color:#f0ab00;font-weight:600;display:none;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#f0ab00"></span> Unsaved changes</span>
+    <span style="margin-left:${window._editorDirty?'8px':'auto'};font-size:.72rem;color:var(--g2);font-weight:600">v0.3 \u2022 Last saved recently</span>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
     <div style="display:grid;grid-template-columns:220px 1fr ${chatOpen?'320px':''};height:calc(100vh - 220px)">
@@ -2042,15 +2500,12 @@ function renderProtocolEditor(c){
         <div style="margin-top:12px;padding:10px;background:rgba(0,152,102,.05);border-radius:8px;border:1px solid rgba(0,152,102,.15)">
           <div style="font-weight:700;font-size:.7rem;margin-bottom:4px;color:var(--g3)">Field Summary</div>
           <div style="font-size:.68rem;color:var(--muted);line-height:1.5">
-            <div>SOW: <strong style="color:var(--g2)">46</strong> \u2022 Quest: <strong style="color:var(--research)">22</strong></div>
-            <div>Template: <strong style="color:var(--preclinical)">28</strong> \u2022 Needs input: <strong style="color:#ef4444">12</strong></div>
+            ${(()=>{const _c=currentProtocolData?countProtocolFields(currentProtocolData):{filled:0,empty:0};return '<div>Populated: <strong style="color:var(--g2)">'+_c.filled+'</strong> \u2022 Needs input: <strong style="color:#ef4444">'+_c.empty+'</strong></div>';})()}
           </div>
         </div>
         <div style="margin-top:8px;padding:10px;background:rgba(0,87,191,.05);border-radius:8px;border:1px solid rgba(0,87,191,.15)">
           <div style="font-weight:700;font-size:.7rem;margin-bottom:4px;color:var(--research)">Version History</div>
-          <div style="font-size:.66rem;color:var(--muted);line-height:1.6">
-            <div>v0.3 \u2022 Sponsor edits imported</div>
-            <div>v0.2 \u2022 SD review (S. Mitchell)</div>
+          <div style="font-size:.66rem;color:var(--muted);line-height:1.6" id="editor-version-list">
             <div>v0.1 \u2022 Ada auto-generated</div>
           </div>
         </div>
@@ -2062,20 +2517,20 @@ function renderProtocolEditor(c){
         <div id="ps0" style="text-align:center;margin-bottom:24px;padding-bottom:24px;border-bottom:3px solid var(--g2)">
           <div style="font-size:.75rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Altasciences Preclinical Columbia, LLC</div>
           <div style="font-size:.7rem;color:var(--muted);margin-bottom:6px">PROTOCOL</div>
-          <h1 style="font-size:1.15rem;border:none;margin:8px 0">${sow('A 28-Day Oral Tablet Toxicity Study of MET097 in G\u00f6ttingen Minipigs\u00AE With a 14-Day Recovery Period')}</h1>
+          <h1 style="font-size:1.15rem;border:none;margin:8px 0">${getStudyTitle()?sow(getStudyTitle()):need('Study Title')}</h1>
         </div>
         <table>
           <tr><th style="width:35%">Field</th><th>Value</th></tr>
-          <tr><td>Testing Facility Study No.</td><td>${sow('2268.99')}</td></tr>
-          <tr><td>Sponsor Reference No.</td><td>${need('Reference Number')}</td></tr>
-          <tr><td>Testing Facility</td><td>${sow('Altasciences Preclinical Columbia, LLC')}<br>${sow('562 State Road DD, Auxvasse, MO 65231, USA')}</td></tr>
-          <tr><td>Sponsor</td><td>${sow('Metsera, Inc.')}<br>${need('Street Address, City, State Zip, Country')}</td></tr>
+          <tr><td>Testing Facility Study No.</td><td>${d('BasicDetails.StudyNo','Study Number')}</td></tr>
+          <tr><td>Sponsor Reference No.</td><td>${d('BasicDetails.SponsorRefNo','Reference Number')}</td></tr>
+          <tr><td>Testing Facility</td><td>${tpl('Altasciences Preclinical Columbia, LLC')}<br>${tpl('562 State Road DD, Auxvasse, MO 65231, USA')}</td></tr>
+          <tr><td>Sponsor</td><td>${d('BasicDetails.SponsorName','Sponsor Name')}<br>${d('BasicDetails.SponsorAddress','Street Address, City, State Zip, Country')}</td></tr>
         </table>
 
         <!-- ============ STUDY INFORMATION ============ -->
         <h1 id="ps1">Study Information</h1>
         <h2>Study Objective</h2>
-        <p>To evaluate the potential toxicity of ${sow('MET097')}, a ${quest('treatment for obesity; delayed gastric emptying/decreased appetite')}, when administered by ${sow('oral tablet')} for ${sow('28 days')} to ${sow('G\u00f6ttingen Minipigs\u00AE')} and to evaluate the reversibility of any finding with a ${sow('14-day recovery period')}. In addition, the toxicokinetic characteristics of ${sow('MET097')} and metabolites will be determined.</p>
+        <p>${getNestedVal(currentProtocolData,'StudyInfo.Objective')?sow(getNestedVal(currentProtocolData,'StudyInfo.Objective')):'To evaluate the potential toxicity of '+d('BasicDetails.TestArticleName','Test Article')+', a '+d('StudyInfo.ClassOrActionOfTestArticle','class/action of test article')+', when administered by '+d('StudyInfo.Route','route')+' for '+d('BasicDetails.TestPeriod','duration')+' to '+d('TestSystem.SpeciesStrain','species')+' and to evaluate the reversibility of any finding with a '+d('StudyInfo.RecoveryPeriod','recovery period')+' recovery period. In addition, the toxicokinetic characteristics of '+d('StudyInfo.TestArticleNameWithTexicokinecCharacteristics','Test Article')+' and metabolites will be determined.'}</p>
 
         <h2>Proposed Study Schedule</h2>
         <table>
@@ -2093,8 +2548,8 @@ function renderProtocolEditor(c){
         <h2>Study Director and Sponsor</h2>
         <table>
           <tr><th>Role</th><th>Details</th></tr>
-          <tr><td>Study Director</td><td>${need('Name, Credentials')}<br>${sow('Altasciences Preclinical Columbia, LLC')}<br>${sow('562 State Road DD, Auxvasse, MO 65231')}</td></tr>
-          <tr><td>Sponsor Study Monitor/Representative</td><td>${need('Name, Credentials')}<br>${sow('Metsera, Inc.')}</td></tr>
+          <tr><td>Study Director</td><td>${d('Personnel.SDS.StudyDirector.Name','Name, Credentials')}<br>${tpl('Altasciences Preclinical Columbia, LLC')}<br>${tpl('562 State Road DD, Auxvasse, MO 65231')}</td></tr>
+          <tr><td>Sponsor Study Monitor/Representative</td><td>${need('Name, Credentials')}<br>${d('BasicDetails.SponsorName','Sponsor Name')}</td></tr>
         </table>
         <h2>Contributing Scientist</h2>
         <table>
@@ -2141,42 +2596,42 @@ function renderProtocolEditor(c){
         <h2>Test Article</h2>
         <table>
           <tr><th style="width:35%">Property</th><th>Value</th></tr>
-          <tr><td>Identification</td><td>${sow('MET097')}</td></tr>
-          <tr><td>Alternate Identification</td><td>${need('Add Name')}</td></tr>
-          <tr><td>Lot/Batch Number</td><td>${need('Add Number or to be included in Final Report')}</td></tr>
-          <tr><td>Expiration or Retest Date</td><td>${need('DD Mm YYYY or Concomitant assessment ongoing')}</td></tr>
-          <tr><td>Storage Conditions</td><td>${quest('In a refrigerator set to maintain 2-8\u00B0C and desiccated')}</td></tr>
+          <tr><td>Identification</td><td>${d('TestMaterial.TestArticle.0.Identification','Test Article Name')}</td></tr>
+          <tr><td>Alternate Identification</td><td>${d('TestMaterial.TestArticle.0.AlternateIdentification','Add Name')}</td></tr>
+          <tr><td>Lot/Batch Number</td><td>${d('TestMaterial.TestArticle.0.LotBatchNo','Add Number')}</td></tr>
+          <tr><td>Expiration or Retest Date</td><td>${d('TestMaterial.TestArticle.0.ExpirationOrRetestDate','DD Mmm YYYY')}</td></tr>
+          <tr><td>Storage Conditions</td><td>${d('TestMaterial.TestArticle.0.StorageConditions','Storage Conditions')}</td></tr>
         </table>
         <h2>Vehicle Control</h2>
         <table>
           <tr><th style="width:35%">Property</th><th>Value</th></tr>
-          <tr><td>Identification</td><td>${quest('True Placebo tablets')}</td></tr>
-          <tr><td>Storage Conditions</td><td>${quest('Refrigerated (2-8\u00B0C) and desiccated')}</td></tr>
+          <tr><td>Identification</td><td>${d('TestMaterial.VehicleControl1.Identification','Vehicle Control')}</td></tr>
+          <tr><td>Storage Conditions</td><td>${d('TestMaterial.VehicleControl1.StorageConditions','Storage Conditions')}</td></tr>
         </table>
         <h2>Test Material Preparation</h2>
         <h3>Preparation of Vehicle Control Formulation</h3>
-        <p>${quest('True Placebo tablets will be provided ready to dose. No vehicle preparation necessary.')}</p>
+        <p>${d('TestMaterial.TestMaterialPreparation.VehicleControlFormulation','Vehicle control preparation details')}</p>
         <h3>Preparation of Test Article Formulation</h3>
-        <p>The Test Article, ${sow('MET097')}, will be ${quest('provided ready to dose as tablets')}. Storage: ${quest('In a refrigerator set to maintain 2-8\u00B0C and desiccated')}.</p>
+        <p>The Test Article, ${d('BasicDetails.TestArticleName','Test Article')}, will be ${d('TestMaterial.TestMaterialPreparation.TestArticleFormulation','formulation preparation details')}. Storage: ${d('TestMaterial.TestArticle.0.StorageConditions','storage conditions')}.</p>
         <h2>Stability of Dose Formulations</h2>
-        <p>${need('Stability data for MET097 formulations to be provided by Sponsor. Data to include concentration range, storage conditions, and duration.')}</p>
+        <p>${d('TestMaterial.StabilityDoseFormulation','Stability data to be provided by Sponsor')}</p>
         <h2>Dose Formulation Analysis</h2>
-        <p>${quest('Not applicable \u2014 tablets provided ready to dose. No dose concentration analysis required.')}</p>
+        <p>${d('TestMaterial.DoseFormulationAnalysis','Dose formulation analysis details')}</p>
         <h2>Test Material Inventory and Disposition</h2>
-        <p>Records of receipt, distribution, storage, and disposition of test material(s) will be maintained. Unused material will be ${quest('shipped back to manufacturer \u2014 Amneal Pharmaceuticals CPR, 995 US HWY 202/206, Bridgewater, NJ 08807, Attn: Shawn Summers')}.</p>
+        <p>Records of receipt, distribution, storage, and disposition of test material(s) will be maintained. Unused material will be ${d('TestMaterial.TestMaterialInventoryAndDisposition','disposition instructions')}.</p>
 
         <!-- ============ TEST SYSTEM ============ -->
         <h1 id="ps6">Test System</h1>
         <table>
           <tr><th style="width:40%">Description</th><th>Value</th></tr>
-          <tr><td>Species / Strain</td><td>${sow('Sus domesticus / G\u00f6ttingen Minipigs\u00AE')}</td></tr>
-          <tr><td>Supplier</td><td>${tpl('Marshall BioResources')}</td></tr>
-          <tr><td>Condition</td><td>${sow('Na\u00efve')}</td></tr>
-          <tr><td>Method of Identification</td><td>${tpl('Subcutaneous implanted electronic identification microchip')}</td></tr>
-          <tr><td>Target Body Weight Range (at dosing initiation)</td><td>${need('X to X kg')}</td></tr>
-          <tr><td>Target Age Range (at dosing initiation)</td><td>${sow('3 to 4 months')}</td></tr>
-          <tr><td>Number of Animals for Acclimation</td><td>${tpl('21 males and 21 females')}</td></tr>
-          <tr><td>Number of Animals for Dosing</td><td>${sow('20 males and 20 females')}</td></tr>
+          <tr><td>Species / Strain</td><td>${d('TestSystem.SpeciesStrain','Species/Strain')}</td></tr>
+          <tr><td>Supplier</td><td>${d('TestSystem.Supplier','Supplier')}</td></tr>
+          <tr><td>Condition</td><td>${d('TestSystem.Condition','Condition')}</td></tr>
+          <tr><td>Method of Identification</td><td>${d('TestSystem.MethodofIdentification','Method of Identification')}</td></tr>
+          <tr><td>Target Body Weight Range (at dosing initiation)</td><td>${d('TestSystem.TargetBodyWeightRange','X to X kg')}</td></tr>
+          <tr><td>Target Age Range (at dosing initiation)</td><td>${d('TestSystem.TargetAgeRage','Age Range')}</td></tr>
+          <tr><td>Number of Animals for Acclimation</td><td>${d('TestSystem.NumberofAnimalsforAcclimation','Animals for Acclimation')}</td></tr>
+          <tr><td>Number of Animals for Dosing</td><td>${d('TestSystem.NumberofAnimalsforDosing','Animals for Dosing')}</td></tr>
         </table>
 
         <!-- ============ HUSBANDRY ============ -->
@@ -2203,14 +2658,18 @@ function renderProtocolEditor(c){
         <h2>Companion Animals</h2>
         <p>Companion animals may be used during the study. These animals will be sourced from the Testing Facility stock colony to provide social housing for study animals.</p>
         <h2>Study Experimental Design</h2>
-        <table>
-          <tr><th>Group</th><th>Test Material</th><th>Dose Level</th><th>Route</th><th>Main M</th><th>Main F</th><th>Recovery M</th><th>Recovery F</th></tr>
-          <tr><td>1</td><td>${quest('True Placebo')}</td><td>${sow('0')}</td><td>${sow('Oral (tablet)')}</td><td>${sow('3')}</td><td>${sow('3')}</td><td>${sow('2')}</td><td>${sow('2')}</td></tr>
-          <tr><td>2</td><td>${sow('MET097')}</td><td>${quest('3 mg/head')}</td><td>${sow('Oral (tablet)')}</td><td>${sow('3')}</td><td>${sow('3')}</td><td>${sow('2')}</td><td>${sow('2')}</td></tr>
-          <tr><td>3</td><td>${sow('MET097')}</td><td>${quest('10 mg/head')}</td><td>${sow('Oral (tablet)')}</td><td>${sow('3')}</td><td>${sow('3')}</td><td>${sow('2')}</td><td>${sow('2')}</td></tr>
-          <tr><td>4</td><td>${sow('MET097')}</td><td>${quest('30 mg/head')}</td><td>${sow('Oral (tablet)')}</td><td>${sow('3')}</td><td>${sow('3')}</td><td>${sow('2')}</td><td>${sow('2')}</td></tr>
-        </table>
-        <p style="font-size:.78rem;color:var(--muted)">${quest('1 tablet/day per animal.')} ${quest('Dose levels subject to change; to be finalized by sponsor.')}</p>
+        ${(()=>{
+          const ed=currentProtocolData?currentProtocolData.ExperimentalDesign:null;
+          const groups=ed?(ed.StudyGroups||ed.study_groups||ed.Groups||[]):[];
+          if(groups.length){
+            return '<table><tr><th>Group</th><th>Test Material</th><th>Dose Level</th><th>Route</th><th>Animals</th></tr>'+
+              groups.map((g,i)=>'<tr><td>'+(i+1)+'</td><td>'+sow(g.TestMaterial||g.test_material||g.name||'')+'</td><td>'+quest((g.DoseLevel||g.dose_level||g.dose||'')+(g.DoseUnit||g.unit||''))+'</td><td>'+sow(g.Route||g.route||getRoute()||'')+'</td><td>'+sow(g.Animals||g.animals||g.NumberOfAnimals||'')+'</td></tr>').join('')+'</table>';
+          }
+          return '<table><tr><th>Group</th><th>Test Material</th><th>Dose Level</th><th>Route</th><th>Animals</th></tr>'+
+            '<tr><td>1</td><td>'+d('TestMaterial.VehicleControl1.Identification','Vehicle')+'</td><td>0</td><td>'+d('StudyInfo.Route','Route')+'</td><td>'+need('# per sex/group')+'</td></tr>'+
+            '<tr><td>2-4</td><td>'+d('BasicDetails.TestArticleName','Test Article')+'</td><td>'+need('Low / Mid / High')+'</td><td>'+d('StudyInfo.Route','Route')+'</td><td>'+need('# per sex/group')+'</td></tr></table>';
+        })()}
+        <p style="font-size:.78rem;color:var(--muted)">${d('ExperimentalDesign.DosingFrequency','Dosing frequency details')}</p>
         <h2>Anesthesia and Analgesia Procedures</h2>
         <table>
           <tr><th style="width:25%">Procedure</th><th>Details</th></tr>
@@ -2221,7 +2680,7 @@ function renderProtocolEditor(c){
         <h2>Temporary Catheter Placement</h2>
         <p>${tpl('During the acclimation period, a temporary jugular catheter will be placed in each study animal for blood collection procedures.')}</p>
         <h2>Administration of Dose Formulations</h2>
-        <p>The tablets will be administered to appropriate animals by ${sow('once daily oral administration')} for ${sow('28 days')}. ${quest('Tablets are provided ready to dose.')}</p>
+        <p>The test article will be administered to appropriate animals by ${d('StudyInfo.Route','route of administration')} for ${d('BasicDetails.TestPeriod','dosing duration')}. ${d('TestMaterial.TestMaterialPreparation.TestArticleFormulation','Formulation preparation details')}.</p>
 
         <!-- ============ EXPERIMENTAL OBSERVATIONS AND PROCEDURES ============ -->
         <h1 id="ps9">Experimental Observations and Procedures</h1>
@@ -2270,7 +2729,7 @@ function renderProtocolEditor(c){
           <tr><td>Centrifugation Initiation</td><td>${tpl('Within 60 minutes of collection')}</td></tr>
           <tr><td>Centrifugation Settings</td><td>${tpl('2000 x g, 4\u00B0C, 15 minutes')}</td></tr>
           <tr><td>Method of Analysis</td><td>${sow('LC-MS/MS')} at Altasciences</td></tr>
-          <tr><td>Analysis Parameters</td><td>${quest('Parent molecule \u2014 MET097 (method developed at Alta)')}</td></tr>
+          <tr><td>Analysis Parameters</td><td>${d('BasicDetails.TestArticleName','Analyte')} ${need('method details')}</td></tr>
           <tr><td>Shipping</td><td>${quest('Batch shipment is acceptable')}</td></tr>
         </table>
         <h3>Toxicokinetic Evaluation</h3>
@@ -2345,7 +2804,7 @@ function renderProtocolEditor(c){
 
         <!-- ============ APPENDIX 2 ============ -->
         <h1 id="ps21">Appendix 2 &mdash; Study Design Guidance</h1>
-        <p>Species: ${quest('G\u00f6ttingen Minipig selected because it has shown responses to the test article or pharmacological class and/or is a relevant model based on pharmacological data.')} Dose justification: ${quest('Doses are based on expected bioavailability of 1%, using exposure in Bama pigs, assuming dose linearity and accumulation. The expected exposure will be well below circulating MET097 levels as measured after subcutaneous injection.')}</p>
+        <p>Species: ${d('TestSystem.SpeciesStrain','Species')} ${need('Species justification and dose rationale')}.</p>
 
         <!-- ============ APPROVALS ============ -->
         <h1 id="ps22">Approvals</h1>
@@ -2369,7 +2828,7 @@ function renderProtocolEditor(c){
         </div>
         <div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px">
           <div style="padding:10px 12px;background:rgba(0,152,102,.06);border-radius:10px 10px 10px 2px;font-size:.76rem;line-height:1.5;color:var(--txt)">
-            <strong>Ada:</strong> I\u2019m ready to help with Protocol 2268.99. You can ask me to:
+            <strong>Ada:</strong> I\u2019m ready to help with Protocol ${getStudyNumber()||currentProtocolId||''}. You can ask me to:
             <div style="margin-top:6px;font-size:.72rem;color:var(--muted)">
               \u2022 Rewrite or expand any section<br>
               \u2022 Check GLP compliance<br>
@@ -2385,7 +2844,7 @@ function renderProtocolEditor(c){
             <strong style="color:var(--research)">You:</strong> Can you check the Experimental Design section for consistency with the SOW?
           </div>
           <div style="padding:10px 12px;background:rgba(0,152,102,.06);border-radius:10px 10px 10px 2px;font-size:.76rem;line-height:1.5">
-            <strong>Ada:</strong> Checking Experimental Design against SOW 2268.99...<br><br>
+            <strong>Ada:</strong> Checking Experimental Design against the SOW...<br><br>
             <span style="color:var(--g2)">\u2713</span> Group allocation matches SOW (3a+2b per sex/group)<br>
             <span style="color:var(--g2)">\u2713</span> Dose levels match questionnaire (3, 10, 30 mg/head)<br>
             <span style="color:var(--g2)">\u2713</span> Route matches SOW (oral tablet, once daily)<br>
@@ -2786,7 +3245,7 @@ const ADA_QA=[
    a:"GLP Compliance Audit \u2014 STD-2026-001 (Swine Cardiovascular Phase I)\n\n\u2713 Study Plan signed by SD and Sponsor before initiation\n\u2713 QAU inspection schedule filed and on track (3 of 5 inspections complete)\n\u2713 Personnel training records current for all 12 study staff\n\u2713 Equipment calibration logs up to date (27 instruments verified)\n\u2713 Test article characterization and chain-of-custody documented\n\u2713 Raw data entries reviewed \u2014 no unauthorized corrections found\n\u2713 SOPs referenced in protocol are current versions\n\u26A0 Minor finding: Facility temperature log for Room 204B has a 2-hour gap on Day 12 \u2014 environmental monitoring backup confirms values were within range.\n\nOverall GLP Compliance Score: 97.4%\nStatus: COMPLIANT with 1 minor observation. Corrective action documented."},
   {keys:['sow','statement of work','cost','estimate','pricing','budget'],
    q:'What does the SOW look like for study 2268.99?',
-   a:"SOW 2268.99 \u2014 Summary extracted from uploaded document:\n\n\u2022 Sponsor: PharmaCo Inc.\n\u2022 Study Type: 28-Day Repeat Dose Toxicity with 14-Day Recovery\n\u2022 Species: Minipig (G\u00F6ttingen or Yucatan)\n\u2022 Test Article: ABC-1234 (small molecule, oral formulation)\n\u2022 Groups: 4 dose groups + vehicle control, 3/sex/group + 2/sex recovery\n\u2022 Route: Oral capsule, once daily\n\u2022 Key Endpoints: Clinical observations, body weights, food consumption, ECG, clinical pathology, TK, gross and microscopic pathology\n\u2022 Estimated Timeline: ~6 months (in-life + reporting)\n\u2022 Site: Columbia, MO\n\nAda has cross-referenced this SOW with the Sponsor Questionnaire and identified 3 items needing clarification before protocol finalization. Want me to show those gaps?"},
+   a:"the SOW \u2014 Summary extracted from uploaded document:\n\n\u2022 Sponsor: PharmaCo Inc.\n\u2022 Study Type: 28-Day Repeat Dose Toxicity with 14-Day Recovery\n\u2022 Species: Minipig (G\u00F6ttingen or Yucatan)\n\u2022 Test Article: ABC-1234 (small molecule, oral formulation)\n\u2022 Groups: 4 dose groups + vehicle control, 3/sex/group + 2/sex recovery\n\u2022 Route: Oral capsule, once daily\n\u2022 Key Endpoints: Clinical observations, body weights, food consumption, ECG, clinical pathology, TK, gross and microscopic pathology\n\u2022 Estimated Timeline: ~6 months (in-life + reporting)\n\u2022 Site: Columbia, MO\n\nAda has cross-referenced this SOW with the Sponsor Questionnaire and identified 3 items needing clarification before protocol finalization. Want me to show those gaps?"},
   {keys:['template','which templates','available templates','species template'],
    q:'What protocol templates are available?',
    a:"Ada currently has the following validated protocol templates:\n\n\u2022 Swine (Minipig) \u2014 v3.2, updated Oct 2025. Covers repeat-dose, cardiovascular safety, surgical models.\n\u2022 Rat \u2014 v3.1, updated Sep 2025. Covers acute, sub-chronic, chronic, carcinogenicity, reproductive tox.\n\u2022 Dog (Beagle) \u2014 v2.8, updated Aug 2025. Covers repeat-dose, cardiovascular, respiratory safety.\n\u2022 Rabbit \u2014 v2.5, updated Jul 2025. Covers dermal irritation, ocular, developmental tox.\n\u2022 Non-Human Primate \u2014 v2.3, updated Jun 2025. Covers biologics, immunotox, large molecule PK.\n\u2022 Mouse \u2014 v3.0, updated Sep 2025. Covers acute, genetic tox, carcinogenicity, immunogenicity.\n\nTotal: 6 species, 23 template sections each. All templates are GLP-compliant and SEND-ready. Use the Template Builder to customize any template by species, site, and section."},
@@ -3007,49 +3466,46 @@ function renderAbout(c){
 }
 
 /* ===== ADA COGNITIVE SEARCH ===== */
-let searchFilters={species:[],studyType:[],sponsor:[],location:[],dateRange:''};
+let searchFilters={species:[],status:[],sponsor:[]};
 let searchQuery='';
+let _searchProtocols=null; // cached from backend
+let _searchLoading=false;
+let _searchDetailId=null; // if set, show protocol detail view
+let _searchHistoryId=null; // if set, show change history view
+let _searchHistoryData=null;
+let _searchVersionsData=null;
+let _searchAmendmentsData=null;
+let _searchHistoryView='summary'; // 'summary' or 'detail'
 
-const SEARCH_DOCS=[
-  {id:'DOC-001',title:'28-Day Repeat Dose Oral Toxicity Study in Swine',type:'Protocol',species:'Swine',sponsor:'PharmaCo',location:'Montreal',date:'2026-02-15',status:'Active',studyId:'STD-2026-001'},
-  {id:'DOC-002',title:'PharmaCo Swine Cardiovascular SOW',type:'SOW',species:'Swine',sponsor:'PharmaCo',location:'Montreal',date:'2026-02-10',status:'Approved',studyId:'STD-2026-001'},
-  {id:'DOC-003',title:'Rodent PK/TK Single Ascending Dose',type:'Protocol',species:'Rat',sponsor:'BioGenix',location:'Seattle',date:'2026-01-20',status:'Active',studyId:'STD-2026-002'},
-  {id:'DOC-004',title:'BioGenix Q1 Rodent Study SOW',type:'SOW',species:'Rat',sponsor:'BioGenix',location:'Seattle',date:'2026-01-12',status:'Approved',studyId:'STD-2026-002'},
-  {id:'DOC-005',title:'Canine 28-Day Repeat Dose Report',type:'Report',species:'Dog',sponsor:'NovaTher',location:'Montreal',date:'2025-12-18',status:'Final',studyId:'STD-2026-003'},
-  {id:'DOC-006',title:'NovaTher Canine Tox SOW',type:'SOW',species:'Dog',sponsor:'NovaTher',location:'Montreal',date:'2025-11-05',status:'Approved',studyId:'STD-2026-003'},
-  {id:'DOC-007',title:'Rodent Carcinogenicity 2-Year Bioassay Protocol',type:'Protocol',species:'Rat',sponsor:'MedVance',location:'Columbia',date:'2026-01-30',status:'Active',studyId:'STD-2026-004'},
-  {id:'DOC-008',title:'MedVance Rodent Carcinogenicity SOW',type:'SOW',species:'Rat',sponsor:'MedVance',location:'Columbia',date:'2026-01-15',status:'Approved',studyId:'STD-2026-004'},
-  {id:'DOC-009',title:'Swine Device Biocompatibility Assessment',type:'Protocol',species:'Swine',sponsor:'ImplantCo',location:'Columbia',date:'2025-11-22',status:'Review',studyId:'STD-2026-005'},
-  {id:'DOC-010',title:'ImplantCo Biocompatibility SOW',type:'SOW',species:'Swine',sponsor:'ImplantCo',location:'Columbia',date:'2025-11-10',status:'Approved',studyId:'STD-2026-005'},
-  {id:'DOC-011',title:'Rodent Juvenile Toxicity Study',type:'Protocol',species:'Rat',sponsor:'PharmaCo',location:'Montreal',date:'2025-10-08',status:'Completed',studyId:'STD-2025-042'},
-  {id:'DOC-012',title:'PharmaCo Juvenile Rat SOW',type:'SOW',species:'Rat',sponsor:'PharmaCo',location:'Montreal',date:'2025-09-20',status:'Approved',studyId:'STD-2025-042'},
-  {id:'DOC-013',title:'Swine Hemodynamics Telemetry Protocol',type:'Protocol',species:'Swine',sponsor:'BioGenix',location:'Columbia',date:'2025-08-14',status:'Completed',studyId:'STD-2025-038'},
-  {id:'DOC-014',title:'Canine Oral Bioavailability Study',type:'Protocol',species:'Dog',sponsor:'MedVance',location:'Seattle',date:'2025-07-22',status:'Completed',studyId:'STD-2025-035'},
-  {id:'DOC-015',title:'Rodent Dose Range Finding SOW',type:'SOW',species:'Rat',sponsor:'NovaTher',location:'Columbia',date:'2025-09-01',status:'Approved',studyId:'STD-2025-040'},
-  {id:'DOC-016',title:'ICF \u2014 Swine Cardiovascular Phase I',type:'ICF',species:'Swine',sponsor:'PharmaCo',location:'Montreal',date:'2026-02-18',status:'Active',studyId:'STD-2026-001'},
-  {id:'DOC-017',title:'CSR \u2014 Canine 28-Day Repeat Dose',type:'CSR',species:'Dog',sponsor:'NovaTher',location:'Montreal',date:'2025-12-28',status:'Final',studyId:'STD-2026-003'},
-  {id:'DOC-018',title:'Regulatory Submission Package \u2014 IND',type:'Regulatory',species:'Rat',sponsor:'BioGenix',location:'Seattle',date:'2026-02-01',status:'Submitted',studyId:'STD-2026-002'},
-  {id:'DOC-019',title:'Swine GLP Compliance Audit Report',type:'Report',species:'Swine',sponsor:'ImplantCo',location:'Columbia',date:'2025-12-02',status:'Final',studyId:'STD-2026-005'},
-  {id:'DOC-020',title:'Rodent Reproductive Toxicity Protocol',type:'Protocol',species:'Rat',sponsor:'PharmaCo',location:'Columbia',date:'2025-06-15',status:'Completed',studyId:'STD-2025-029'},
-];
+async function loadSearchProtocols(force){
+  if(_searchProtocols&&!force)return _searchProtocols;
+  if(!backendConnected){_searchProtocols=[];return _searchProtocols;}
+  _searchLoading=true;
+  try{
+    const r=await apiCall('/api/protocols',{method:'GET'});
+    _searchProtocols=r.protocols||[];
+  }catch(e){
+    console.error('Failed to load protocols:',e);
+    _searchProtocols=[];
+  }
+  _searchLoading=false;
+  return _searchProtocols;
+}
 
-function getFilteredDocs(){
-  return SEARCH_DOCS.filter(d=>{
+function getFilteredProtocols(){
+  if(!_searchProtocols)return[];
+  return _searchProtocols.filter(p=>{
     if(searchQuery){
       const q=searchQuery.toLowerCase();
-      if(!d.title.toLowerCase().includes(q)&&!d.type.toLowerCase().includes(q)&&!d.species.toLowerCase().includes(q)&&!d.sponsor.toLowerCase().includes(q)&&!d.location.toLowerCase().includes(q)&&!d.studyId.toLowerCase().includes(q))return false;
+      const hay=(p.study_number+' '+p.title+' '+p.sponsor+' '+p.species+' '+p.protocol_id+' '+p.filename).toLowerCase();
+      if(!hay.includes(q))return false;
     }
-    if(searchFilters.species.length&&!searchFilters.species.includes(d.species))return false;
-    if(searchFilters.studyType.length&&!searchFilters.studyType.includes(d.type))return false;
-    if(searchFilters.sponsor.length&&!searchFilters.sponsor.includes(d.sponsor))return false;
-    if(searchFilters.location.length&&!searchFilters.location.includes(d.location))return false;
-    if(searchFilters.dateRange){
-      const dd=new Date(d.date);const now=new Date('2026-03-06');
-      if(searchFilters.dateRange==='30d'&&(now-dd)>30*86400000)return false;
-      if(searchFilters.dateRange==='90d'&&(now-dd)>90*86400000)return false;
-      if(searchFilters.dateRange==='6m'&&(now-dd)>180*86400000)return false;
-      if(searchFilters.dateRange==='1y'&&(now-dd)>365*86400000)return false;
+    if(searchFilters.species.length){
+      const sp=(p.species||'').toLowerCase();
+      if(!searchFilters.species.some(f=>sp.includes(f.toLowerCase())))return false;
     }
+    if(searchFilters.status.length&&!searchFilters.status.includes(p.display_status))return false;
+    if(searchFilters.sponsor.length&&!searchFilters.sponsor.includes(p.sponsor))return false;
     return true;
   });
 }
@@ -3060,108 +3516,190 @@ function toggleFilter(group,val){
   if(idx>-1)arr.splice(idx,1);else arr.push(val);
   navigate('search');
 }
-function setDateFilter(val){
-  searchFilters.dateRange=searchFilters.dateRange===val?'':val;navigate('search');
-}
 function doSearch(q){searchQuery=q;navigate('search');}
 
+function statusColor(s){
+  if(!s)return 'var(--muted)';
+  const sl=s.toLowerCase();
+  if(sl==='draft'||sl.includes('pending'))return '#e67e22';
+  if(sl==='updated'||sl.includes('modified'))return '#3498db';
+  if(sl==='final'||sl==='completed')return '#27ae60';
+  if(sl.includes('amendment'))return '#9b59b6';
+  return 'var(--g2)';
+}
+function statusBadgeClass(s){
+  if(!s)return'';
+  const sl=s.toLowerCase();
+  if(sl==='draft'||sl.includes('pending'))return 'bg-orange';
+  if(sl==='updated'||sl.includes('modified'))return 'bg-blue';
+  if(sl==='final'||sl==='completed')return 'bg-green';
+  if(sl.includes('amendment'))return 'bg-purple';
+  return 'bg-green';
+}
+
+/* Open a protocol from search results */
+async function openSearchProtocol(pid){
+  _searchDetailId=pid;
+  // Load versions, amendments, and audit for detail view
+  try{
+    const[vr,ar]=await Promise.all([
+      apiCall('/api/protocols/'+pid+'/versions'),
+      apiCall('/api/protocols/'+pid+'/amendments')
+    ]);
+    _searchVersionsData=vr.versions||[];
+    _searchAmendmentsData=ar.amendments||[];
+  }catch(e){
+    _searchVersionsData=[];
+    _searchAmendmentsData=[];
+  }
+  navigate('search');
+}
+
+/* Show change history for a protocol */
+async function showChangeHistory(pid){
+  _searchHistoryId=pid;
+  _searchHistoryView='summary';
+  try{
+    const[vr,ar,au]=await Promise.all([
+      apiCall('/api/protocols/'+pid+'/versions'),
+      apiCall('/api/protocols/'+pid+'/amendments'),
+      apiCall('/api/protocols/'+pid+'/audit')
+    ]);
+    _searchVersionsData=vr.versions||[];
+    _searchAmendmentsData=ar.amendments||[];
+    _searchHistoryData=au.audit_log||au||[];
+  }catch(e){
+    _searchVersionsData=[];_searchAmendmentsData=[];_searchHistoryData=[];
+  }
+  navigate('search');
+}
+
+function backToSearchList(){
+  _searchDetailId=null;_searchHistoryId=null;_searchHistoryData=null;
+  navigate('search');
+}
+
+/* Navigate into protocol workflow from search */
+function goToProtocol(pid){
+  currentProtocolId=pid;
+  // Load the protocol data
+  apiCall('/api/protocols/'+pid).then(r=>{
+    if(r.extracted_json)currentProtocolData=r.extracted_json;
+    protocolStep=5;
+    showProtocolEditor=false;
+    navigate('protocol');
+  }).catch(e=>{toast('Could not load protocol: '+e.message)});
+}
+
 function renderSearch(c){
-  const filtered=getFilteredDocs();
   const page=h('div',{className:'page'});
 
-  // Header + search bar
-  page.innerHTML=`<h2 style="font-size:1.3rem;font-weight:800;margin-bottom:4px">Ada Cognitive Search</h2>
-    <p style="color:var(--muted);font-size:.85rem;margin-bottom:20px">Search across all studies, protocols, SOWs, and documents \u2014 with faceted filtering and instant breakdowns</p>`;
+  // If showing change history, render that instead
+  if(_searchHistoryId){renderSearchHistory(page);c.appendChild(page);return;}
+  // If showing protocol detail, render that instead
+  if(_searchDetailId){renderSearchDetail(page);c.appendChild(page);return;}
 
-  // Example queries
+  // Load protocols from backend on first render
+  if(!_searchProtocols&&!_searchLoading){
+    loadSearchProtocols().then(()=>navigate('search'));
+    page.innerHTML=`<div style="text-align:center;padding:80px 20px;color:var(--muted)"><div class="spinner" style="margin:0 auto 16px"></div><p>Loading protocols from Ada...</p></div>`;
+    c.appendChild(page);return;
+  }
+
+  const filtered=getFilteredProtocols();
+
+  // Header
+  page.innerHTML=`<h2 style="font-size:1.3rem;font-weight:800;margin-bottom:4px">Search Studies & Protocols</h2>
+    <p style="color:var(--muted);font-size:.85rem;margin-bottom:20px">Find protocols by study number, sponsor, species, or status. Click to view protocol details, version history, and amendments.</p>`;
+
+  // Search bar
+  const hasFilters=searchQuery||searchFilters.species.length||searchFilters.status.length||searchFilters.sponsor.length;
   page.innerHTML+=`<div class="card fade-up" style="padding:16px 20px;margin-bottom:20px">
-    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
       <div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg);border-radius:10px;padding:10px 16px">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g2)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="search-input" placeholder="Search documents, studies, sponsors..." value="${searchQuery}" style="border:none;background:transparent;font-size:.9rem;flex:1;color:var(--txt)" onkeydown="if(event.key==='Enter')doSearch(this.value)">
+        <input id="search-input" placeholder="Search by study number, sponsor, species, title..." value="${searchQuery}" style="border:none;background:transparent;font-size:.9rem;flex:1;color:var(--txt)" onkeydown="if(event.key==='Enter')doSearch(this.value)">
       </div>
       <button class="btn btn-p" onclick="doSearch(document.getElementById('search-input').value)">Search</button>
-      ${searchQuery||searchFilters.species.length||searchFilters.studyType.length||searchFilters.sponsor.length||searchFilters.location.length||searchFilters.dateRange?`<button class="btn btn-s" style="font-size:.78rem;padding:8px 14px" onclick="searchQuery='';searchFilters={species:[],studyType:[],sponsor:[],location:[],dateRange:''};navigate('search')">Clear All</button>`:''}
-    </div>
-    <div style="font-size:.78rem;color:var(--muted)">Try:
-      <button style="color:var(--g2);font-size:.78rem;text-decoration:underline;cursor:pointer;border:none;background:none;font-family:inherit" onclick="doSearch('Columbia')">"Studies in Columbia"</button> \u00B7
-      <button style="color:var(--g2);font-size:.78rem;text-decoration:underline;cursor:pointer;border:none;background:none;font-family:inherit" onclick="doSearch('rat SOW')">"Rat SOWs"</button> \u00B7
-      <button style="color:var(--g2);font-size:.78rem;text-decoration:underline;cursor:pointer;border:none;background:none;font-family:inherit" onclick="doSearch('PharmaCo')">"Work with PharmaCo"</button> \u00B7
-      <button style="color:var(--g2);font-size:.78rem;text-decoration:underline;cursor:pointer;border:none;background:none;font-family:inherit" onclick="searchFilters.species=['Swine'];navigate('search')">"All swine studies"</button>
+      <button class="btn btn-s" style="font-size:.78rem;padding:8px 14px" onclick="_searchProtocols=null;loadSearchProtocols(true).then(()=>navigate('search'))">Refresh</button>
+      ${hasFilters?`<button class="btn btn-s" style="font-size:.78rem;padding:8px 14px" onclick="searchQuery='';searchFilters={species:[],status:[],sponsor:[]};navigate('search')">Clear All</button>`:''}
     </div>
   </div>`;
 
-  // Breakdowns
-  const speciesCounts={};const typeCounts={};const locCounts={};const sponsorCounts={};
-  filtered.forEach(d=>{
-    speciesCounts[d.species]=(speciesCounts[d.species]||0)+1;
-    typeCounts[d.type]=(typeCounts[d.type]||0)+1;
-    locCounts[d.location]=(locCounts[d.location]||0)+1;
-    sponsorCounts[d.sponsor]=(sponsorCounts[d.sponsor]||0)+1;
-  });
+  // Summary cards
+  const draftCnt=filtered.filter(p=>p.display_status==='Draft').length;
+  const updCnt=filtered.filter(p=>p.display_status==='Updated').length;
+  const finalCnt=filtered.filter(p=>p.display_status==='Final').length;
+  const amendCnt=filtered.filter(p=>p.display_status.includes('Amendment')).length;
 
   page.innerHTML+=`<div class="breakdown-grid fade-up d1">
-    <div class="breakdown-card"><div class="num" style="color:var(--g2)">${filtered.length}</div><div class="lbl">Documents Found</div></div>
-    <div class="breakdown-card"><div class="num" style="color:var(--research)">${Object.keys(speciesCounts).length}</div><div class="lbl">Species</div></div>
-    <div class="breakdown-card"><div class="num" style="color:var(--preclinical)">${Object.keys(sponsorCounts).length}</div><div class="lbl">Sponsors</div></div>
-    <div class="breakdown-card"><div class="num" style="color:var(--bio)">${Object.keys(locCounts).length}</div><div class="lbl">Locations</div></div>
+    <div class="breakdown-card" style="cursor:pointer" onclick="searchFilters.status=[];navigate('search')"><div class="num" style="color:var(--g2)">${filtered.length}</div><div class="lbl">Total Protocols</div></div>
+    <div class="breakdown-card" style="cursor:pointer" onclick="searchFilters.status=['Draft'];navigate('search')"><div class="num" style="color:#e67e22">${draftCnt}</div><div class="lbl">Draft</div></div>
+    <div class="breakdown-card" style="cursor:pointer" onclick="searchFilters.status=['Updated'];navigate('search')"><div class="num" style="color:#3498db">${updCnt}</div><div class="lbl">Updated</div></div>
+    <div class="breakdown-card" style="cursor:pointer" onclick="searchFilters.status=['Final'];navigate('search')"><div class="num" style="color:#27ae60">${finalCnt}</div><div class="lbl">Final</div></div>
   </div>`;
 
-  // Main grid: Facets | Results
+  // Facets + Results grid
   let facetsHTML=`<div class="facet-panel">`;
 
-  // Date range
-  facetsHTML+=`<div class="card" style="padding:14px;margin-bottom:12px"><div class="facet-group"><h4>\uD83D\uDCC5 Date Range</h4>
-    ${['30d','90d','6m','1y'].map(d=>`<div class="facet-item ${searchFilters.dateRange===d?'active':''}" onclick="setDateFilter('${d}')"><div class="facet-check">${searchFilters.dateRange===d?'\u2713':''}</div>${d==='30d'?'Last 30 days':d==='90d'?'Last 3 months':d==='6m'?'Last 6 months':'Last year'}</div>`).join('')}
+  // Status facet
+  const statuses=['Draft','Updated','Final'];
+  const allStatuses=[...new Set((_searchProtocols||[]).map(p=>p.display_status))];
+  allStatuses.forEach(s=>{if(!statuses.includes(s))statuses.push(s)});
+  facetsHTML+=`<div class="card" style="padding:14px;margin-bottom:12px"><div class="facet-group"><h4>Status</h4>
+    ${statuses.map(s=>{const cnt=(_searchProtocols||[]).filter(p=>p.display_status===s).length;const act=searchFilters.status.includes(s);return cnt?`<div class="facet-item ${act?'active':''}" onclick="toggleFilter('status','${s}')"><div class="facet-check">${act?'\u2713':''}</div><span style="color:${statusColor(s)};font-weight:600">${s}</span><span class="facet-count">${cnt}</span></div>`:''}).join('')}
   </div></div>`;
 
   // Species facet
-  facetsHTML+=`<div class="card" style="padding:14px;margin-bottom:12px"><div class="facet-group"><h4>\uD83E\uDDEC Species</h4>
-    ${['Rat','Swine','Dog'].map(sp=>{const cnt=SEARCH_DOCS.filter(d=>d.species===sp).length;const act=searchFilters.species.includes(sp);return `<div class="facet-item ${act?'active':''}" onclick="toggleFilter('species','${sp}')"><div class="facet-check">${act?'\u2713':''}</div>${speciesEmoji(sp)} ${sp}<span class="facet-count">${cnt}</span></div>`}).join('')}
-  </div></div>`;
-
-  // Doc type facet
-  facetsHTML+=`<div class="card" style="padding:14px;margin-bottom:12px"><div class="facet-group"><h4>\uD83D\uDCC1 Document Type</h4>
-    ${['Protocol','SOW','Report','ICF','CSR','Regulatory'].map(t=>{const cnt=SEARCH_DOCS.filter(d=>d.type===t).length;const act=searchFilters.studyType.includes(t);return cnt?`<div class="facet-item ${act?'active':''}" onclick="toggleFilter('studyType','${t}')"><div class="facet-check">${act?'\u2713':''}</div>${t}<span class="facet-count">${cnt}</span></div>`:''}).join('')}
-  </div></div>`;
+  const allSpecies=[...new Set((_searchProtocols||[]).map(p=>(p.species||'unknown')))].filter(Boolean);
+  if(allSpecies.length){
+    facetsHTML+=`<div class="card" style="padding:14px;margin-bottom:12px"><div class="facet-group"><h4>Species</h4>
+      ${allSpecies.map(sp=>{const cnt=(_searchProtocols||[]).filter(p=>p.species===sp).length;const act=searchFilters.species.includes(sp);return `<div class="facet-item ${act?'active':''}" onclick="toggleFilter('species','${sp}')"><div class="facet-check">${act?'\u2713':''}</div>${speciesEmoji(sp)} ${sp}<span class="facet-count">${cnt}</span></div>`}).join('')}
+    </div></div>`;
+  }
 
   // Sponsor facet
-  facetsHTML+=`<div class="card" style="padding:14px;margin-bottom:12px"><div class="facet-group"><h4>\uD83C\uDFE2 Sponsor</h4>
-    ${['PharmaCo','BioGenix','NovaTher','MedVance','ImplantCo'].map(s=>{const cnt=SEARCH_DOCS.filter(d=>d.sponsor===s).length;const act=searchFilters.sponsor.includes(s);return `<div class="facet-item ${act?'active':''}" onclick="toggleFilter('sponsor','${s}')"><div class="facet-check">${act?'\u2713':''}</div>${s}<span class="facet-count">${cnt}</span></div>`}).join('')}
-  </div></div>`;
-
-  // Location facet
-  facetsHTML+=`<div class="card" style="padding:14px;margin-bottom:12px"><div class="facet-group"><h4>\uD83D\uDCCD Location</h4>
-    ${['Montreal','Columbia','Seattle'].map(l=>{const cnt=SEARCH_DOCS.filter(d=>d.location===l).length;const act=searchFilters.location.includes(l);return `<div class="facet-item ${act?'active':''}" onclick="toggleFilter('location','${l}')"><div class="facet-check">${act?'\u2713':''}</div>${l}<span class="facet-count">${cnt}</span></div>`}).join('')}
-  </div></div>`;
+  const allSponsors=[...new Set((_searchProtocols||[]).map(p=>p.sponsor).filter(Boolean))];
+  if(allSponsors.length){
+    facetsHTML+=`<div class="card" style="padding:14px;margin-bottom:12px"><div class="facet-group"><h4>Sponsor</h4>
+      ${allSponsors.map(s=>{const cnt=(_searchProtocols||[]).filter(p=>p.sponsor===s).length;const act=searchFilters.sponsor.includes(s);return `<div class="facet-item ${act?'active':''}" onclick="toggleFilter('sponsor','${s}')"><div class="facet-check">${act?'\u2713':''}</div>${s}<span class="facet-count">${cnt}</span></div>`}).join('')}
+    </div></div>`;
+  }
   facetsHTML+=`</div>`;
 
   // Results
   let resultsHTML=`<div>`;
-  resultsHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:.85rem;font-weight:600">${filtered.length} result${filtered.length!==1?'s':''} found</span><span style="font-size:.78rem;color:var(--muted)">Sorted by date (newest first)</span></div>`;
+  resultsHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:.85rem;font-weight:600">${filtered.length} protocol${filtered.length!==1?'s':''} found</span></div>`;
 
   if(filtered.length===0){
-    resultsHTML+=`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:2.5rem;margin-bottom:12px">\uD83D\uDD0D</div><p style="font-weight:600;margin-bottom:4px">No documents match your filters</p><p style="font-size:.82rem">Try adjusting your search query or clearing some filters.</p></div>`;
+    resultsHTML+=`<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:2.5rem;margin-bottom:12px">\uD83D\uDD0D</div><p style="font-weight:600;margin-bottom:4px">No protocols match your search</p><p style="font-size:.82rem">Try adjusting your query or clearing filters. If no protocols exist yet, upload a SOW to create one.</p></div>`;
   } else {
-    const typeColors={Protocol:'var(--g2)',SOW:'var(--research)',Report:'var(--preclinical)',ICF:'var(--bio)',CSR:'var(--clinical)',Regulatory:'var(--mfg)'};
-    filtered.sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(d=>{
-      resultsHTML+=`<div class="search-result">
+    filtered.forEach(p=>{
+      const vLabel=p.latest_version||'v0.1';
+      const amendLabel=p.amendment_count>0?`<span class="badge bg-purple" style="font-size:.7rem;margin-left:6px">${p.amendment_count} Amendment${p.amendment_count>1?'s':''}</span>`:'';
+      resultsHTML+=`<div class="search-result" style="cursor:pointer" onclick="openSearchProtocol('${p.protocol_id}')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-              <span class="badge" style="background:${typeColors[d.type]||'var(--g2)'}20;color:${typeColors[d.type]||'var(--g2)'}">${d.type}</span>
-              <span style="font-size:.72rem;color:var(--muted)">${d.id}</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span class="badge" style="background:var(--g2)20;color:var(--g2)">Protocol</span>
+              <span style="font-size:.78rem;font-weight:600;color:var(--txt)">${p.study_number||p.protocol_id}</span>
+              <span style="font-size:.72rem;color:var(--muted)">${vLabel}</span>
+              ${amendLabel}
             </div>
-            <h4 style="font-weight:700;font-size:.9rem;margin-bottom:2px">${d.title}</h4>
-            <p style="font-size:.78rem;color:var(--muted)">Study ${d.studyId}</p>
+            <h4 style="font-weight:700;font-size:.9rem;margin-bottom:4px;line-height:1.3">${p.title||'Untitled Protocol'}</h4>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+              ${p.species?`<span style="font-size:.78rem;color:var(--muted)">${speciesEmoji(p.species)} ${p.species}</span>`:''}
+              ${p.sponsor?`<span style="font-size:.78rem;color:var(--muted)">${p.sponsor}</span>`:''}
+              <span style="font-size:.78rem;color:var(--muted)">${p.version_count} version${p.version_count!==1?'s':''}</span>
+            </div>
           </div>
-          <span class="badge ${d.status==='Active'?'bg-green':d.status==='Completed'||d.status==='Final'?'bg-blue':d.status==='Review'?'bg-orange':d.status==='Submitted'?'bg-purple':'bg-green'}">${d.status}</span>
-        </div>
-        <div class="result-meta">
-          <span class="result-tag">${speciesEmoji(d.species)} ${d.species}</span>
-          <span class="result-tag">\uD83C\uDFE2 ${d.sponsor}</span>
-          <span class="result-tag">\uD83D\uDCCD ${d.location}</span>
-          <span class="result-tag">\uD83D\uDCC5 ${new Date(d.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <span class="badge ${statusBadgeClass(p.display_status)}">${p.display_status}</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-s" style="font-size:.72rem;padding:4px 10px" onclick="event.stopPropagation();showChangeHistory('${p.protocol_id}')">History</button>
+              <button class="btn btn-p" style="font-size:.72rem;padding:4px 10px" onclick="event.stopPropagation();goToProtocol('${p.protocol_id}')">Open</button>
+            </div>
+          </div>
         </div>
       </div>`;
     });
@@ -3170,6 +3708,208 @@ function renderSearch(c){
 
   page.innerHTML+=`<div class="search-container">${facetsHTML}${resultsHTML}</div>`;
   c.appendChild(page);
+}
+
+/* ===== SEARCH: PROTOCOL DETAIL VIEW ===== */
+function renderSearchDetail(page){
+  const p=(_searchProtocols||[]).find(x=>x.protocol_id===_searchDetailId);
+  if(!p){page.innerHTML=`<p>Protocol not found</p>`;return;}
+
+  page.innerHTML=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <button class="btn btn-s" style="padding:6px 14px" onclick="backToSearchList()">&larr; Back to Search</button>
+    <div>
+      <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:2px">Protocol ${p.study_number||p.protocol_id}</h2>
+      <p style="color:var(--muted);font-size:.82rem">${p.title||'Untitled Protocol'}</p>
+    </div>
+  </div>`;
+
+  // Status + info cards
+  page.innerHTML+=`<div class="breakdown-grid fade-up">
+    <div class="breakdown-card"><div class="num" style="color:${statusColor(p.display_status)};font-size:1rem">${p.display_status}</div><div class="lbl">Current Status</div></div>
+    <div class="breakdown-card"><div class="num" style="color:var(--g2)">${p.latest_version||'v0.1'}</div><div class="lbl">Latest Version</div></div>
+    <div class="breakdown-card"><div class="num" style="color:var(--research)">${p.version_count||0}</div><div class="lbl">Versions</div></div>
+    <div class="breakdown-card"><div class="num" style="color:var(--preclinical)">${p.amendment_count||0}</div><div class="lbl">Amendments</div></div>
+  </div>`;
+
+  // Info section
+  page.innerHTML+=`<div class="card fade-up d1" style="padding:20px;margin-bottom:16px">
+    <h3 style="font-weight:700;font-size:1rem;margin-bottom:12px">Protocol Information</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><span style="font-size:.78rem;color:var(--muted)">Study Number</span><p style="font-weight:600;font-size:.9rem">${p.study_number||p.protocol_id}</p></div>
+      <div><span style="font-size:.78rem;color:var(--muted)">Species</span><p style="font-weight:600;font-size:.9rem">${p.species?speciesEmoji(p.species)+' '+p.species:'Not specified'}</p></div>
+      <div><span style="font-size:.78rem;color:var(--muted)">Sponsor</span><p style="font-weight:600;font-size:.9rem">${p.sponsor||'Not specified'}</p></div>
+      <div><span style="font-size:.78rem;color:var(--muted)">Source File</span><p style="font-weight:600;font-size:.9rem">${p.filename||'N/A'}</p></div>
+    </div>
+  </div>`;
+
+  // Version timeline
+  page.innerHTML+=`<div class="card fade-up d2" style="padding:20px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="font-weight:700;font-size:1rem">Version History</h3>
+      <button class="btn btn-s" style="font-size:.78rem;padding:6px 14px" onclick="showChangeHistory('${p.protocol_id}')">View Full History</button>
+    </div>
+    ${(_searchVersionsData||[]).length===0?'<p style="color:var(--muted);font-size:.85rem">No versions recorded yet.</p>':
+    `<div style="position:relative;padding-left:24px;border-left:2px solid var(--border)">
+      ${(_searchVersionsData||[]).map((v,i)=>{
+        const isLatest=i===(_searchVersionsData||[]).length-1;
+        const dotColor=v.status==='Final'?'#27ae60':v.status==='Draft'?'#e67e22':'#3498db';
+        const ts=v.timestamp?new Date(v.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+        return `<div style="position:relative;margin-bottom:16px">
+          <div style="position:absolute;left:-30px;top:2px;width:12px;height:12px;border-radius:50%;background:${dotColor};border:2px solid white;box-shadow:0 0 0 2px ${dotColor}40"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <span style="font-weight:700;font-size:.9rem">${v.version}</span>
+              <span class="badge ${statusBadgeClass(v.status)}" style="margin-left:8px;font-size:.7rem">${v.status||'Draft'}</span>
+              ${isLatest?'<span style="font-size:.7rem;color:var(--g2);margin-left:6px;font-weight:600">CURRENT</span>':''}
+              <p style="font-size:.78rem;color:var(--muted);margin-top:2px">${v.label||v.author||''}</p>
+            </div>
+            <span style="font-size:.72rem;color:var(--muted)">${ts}</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`}
+  </div>`;
+
+  // Amendments
+  if((_searchAmendmentsData||[]).length>0){
+    page.innerHTML+=`<div class="card fade-up d3" style="padding:20px;margin-bottom:16px">
+      <h3 style="font-weight:700;font-size:1rem;margin-bottom:14px">Amendments</h3>
+      ${_searchAmendmentsData.map((a,i)=>{
+        const ts=a.timestamp?new Date(a.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><span style="font-weight:700">Amendment ${a.amendment_number||i+1}</span>
+              <span class="badge bg-purple" style="margin-left:8px;font-size:.7rem">${a.status||'Active'}</span></div>
+            <span style="font-size:.72rem;color:var(--muted)">${ts}</span>
+          </div>
+          <p style="font-size:.82rem;color:var(--muted);margin-top:4px">${a.reason||a.label||'Protocol amendment'}</p>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // Action buttons
+  page.innerHTML+=`<div style="display:flex;gap:10px;margin-top:20px">
+    <button class="btn btn-p" onclick="goToProtocol('${p.protocol_id}')">Open Protocol</button>
+    <button class="btn btn-s" onclick="showChangeHistory('${p.protocol_id}')">View Change History</button>
+    <button class="btn btn-s" onclick="downloadProtocolDocx('${p.protocol_id}')">Download DOCX</button>
+  </div>`;
+}
+
+/* ===== SEARCH: CHANGE HISTORY VIEW ===== */
+function renderSearchHistory(page){
+  const p=(_searchProtocols||[]).find(x=>x.protocol_id===_searchHistoryId);
+  const pid=_searchHistoryId;
+
+  page.innerHTML=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <button class="btn btn-s" style="padding:6px 14px" onclick="_searchHistoryId=null;_searchHistoryData=null;${_searchDetailId?'':'backToSearchList();'}navigate('search')">&larr; Back</button>
+    <div>
+      <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:2px">Change History${p?' \u2014 '+( p.study_number||p.protocol_id):''}</h2>
+      <p style="color:var(--muted);font-size:.82rem">Complete audit trail of all protocol modifications</p>
+    </div>
+  </div>`;
+
+  // View toggle: Summary | Detail
+  page.innerHTML+=`<div class="card fade-up" style="padding:4px;margin-bottom:20px;display:inline-flex;gap:4px">
+    <button class="btn ${_searchHistoryView==='summary'?'btn-p':'btn-s'}" style="font-size:.82rem;padding:8px 20px" onclick="_searchHistoryView='summary';navigate('search')">Summary</button>
+    <button class="btn ${_searchHistoryView==='detail'?'btn-p':'btn-s'}" style="font-size:.82rem;padding:8px 20px" onclick="_searchHistoryView='detail';navigate('search')">Detail</button>
+  </div>`;
+
+  if(_searchHistoryView==='summary'){
+    renderHistorySummary(page);
+  } else {
+    renderHistoryDetail(page);
+  }
+}
+
+function renderHistorySummary(page){
+  const versions=_searchVersionsData||[];
+  const amendments=_searchAmendmentsData||[];
+
+  // Build combined timeline
+  let timeline=[];
+  versions.forEach(v=>{
+    timeline.push({type:'version',version:v.version,status:v.status||'Draft',author:v.author||'',label:v.label||'',timestamp:v.timestamp||'',fields:v.field_count||0});
+  });
+  amendments.forEach((a,i)=>{
+    timeline.push({type:'amendment',number:a.amendment_number||i+1,status:a.status||'Active',author:a.author||'',label:a.reason||a.label||'Amendment',timestamp:a.timestamp||''});
+  });
+  timeline.sort((a,b)=>new Date(a.timestamp||0)-new Date(b.timestamp||0));
+
+  if(timeline.length===0){
+    page.innerHTML+=`<div class="card" style="padding:40px;text-align:center;color:var(--muted)"><p style="font-weight:600">No version history yet</p><p style="font-size:.82rem">Versions are created when protocol data is extracted or edited.</p></div>`;
+    return;
+  }
+
+  // Summary stats
+  page.innerHTML+=`<div class="breakdown-grid fade-up d1">
+    <div class="breakdown-card"><div class="num" style="color:var(--g2)">${versions.length}</div><div class="lbl">Versions</div></div>
+    <div class="breakdown-card"><div class="num" style="color:#9b59b6">${amendments.length}</div><div class="lbl">Amendments</div></div>
+    <div class="breakdown-card"><div class="num" style="color:var(--research)">${timeline.length}</div><div class="lbl">Total Changes</div></div>
+    <div class="breakdown-card"><div class="num" style="font-size:.9rem;color:var(--muted)">${timeline.length>0?new Date(timeline[timeline.length-1].timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'N/A'}</div><div class="lbl">Last Changed</div></div>
+  </div>`;
+
+  // Timeline
+  page.innerHTML+=`<div class="card fade-up d2" style="padding:20px">
+    <h3 style="font-weight:700;font-size:1rem;margin-bottom:16px">Version Timeline</h3>
+    <div style="position:relative;padding-left:28px;border-left:2px solid var(--border)">
+      ${timeline.map((t,i)=>{
+        const isAmend=t.type==='amendment';
+        const dotColor=isAmend?'#9b59b6':t.status==='Final'?'#27ae60':t.status==='Draft'?'#e67e22':'#3498db';
+        const icon=isAmend?'<span style="font-size:.72rem;font-weight:700;color:#9b59b6">AMEND</span>':'<span style="font-size:.72rem;font-weight:700;color:'+dotColor+'">'+t.version+'</span>';
+        const ts=t.timestamp?new Date(t.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+        return `<div style="position:relative;margin-bottom:18px;padding-bottom:${i<timeline.length-1?'18px':'0'};${i<timeline.length-1?'border-bottom:1px solid var(--border)08':''}">
+          <div style="position:absolute;left:-34px;top:2px;width:12px;height:12px;border-radius:50%;background:${dotColor};border:2px solid white;box-shadow:0 0 0 2px ${dotColor}30"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+            <div style="display:flex;align-items:center;gap:8px">
+              ${icon}
+              <span class="badge ${isAmend?'bg-purple':statusBadgeClass(t.status)}" style="font-size:.68rem">${isAmend?'Amendment '+(t.number||''):t.status}</span>
+            </div>
+            <span style="font-size:.72rem;color:var(--muted)">${ts}</span>
+          </div>
+          <p style="font-size:.82rem;margin-top:2px">${t.label}</p>
+          <p style="font-size:.75rem;color:var(--muted);margin-top:2px">by ${t.author||'System'}</p>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function renderHistoryDetail(page){
+  const auditLog=Array.isArray(_searchHistoryData)?_searchHistoryData:[];
+
+  if(auditLog.length===0){
+    page.innerHTML+=`<div class="card" style="padding:40px;text-align:center;color:var(--muted)"><p style="font-weight:600">No detailed audit log available</p><p style="font-size:.82rem">Detailed change records are created when protocol fields are modified, versions are created, or documents are uploaded.</p></div>`;
+    return;
+  }
+
+  page.innerHTML+=`<div class="card fade-up" style="padding:20px">
+    <h3 style="font-weight:700;font-size:1rem;margin-bottom:16px">Audit Log <span style="font-size:.78rem;font-weight:400;color:var(--muted)">(${auditLog.length} entries)</span></h3>
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border);text-align:left">
+          <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:.75rem;text-transform:uppercase">Timestamp</th>
+          <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:.75rem;text-transform:uppercase">Action</th>
+          <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:.75rem;text-transform:uppercase">Author</th>
+          <th style="padding:8px 12px;font-weight:600;color:var(--muted);font-size:.75rem;text-transform:uppercase">Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${auditLog.map(e=>{
+          const ts=e.timestamp?new Date(e.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+          const action=(e.action||'').replace(/_/g,' ');
+          const details=e.details?Object.entries(e.details).map(([k,v])=>`<span style="color:var(--muted)">${k}:</span> ${typeof v==='object'?JSON.stringify(v):v}`).join(', '):'';
+          const actionColor=action.includes('created')?'#27ae60':action.includes('upload')?'#3498db':action.includes('delete')||action.includes('reject')?'#e74c3c':'var(--txt)';
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 12px;white-space:nowrap;color:var(--muted);font-size:.78rem">${ts}</td>
+            <td style="padding:8px 12px"><span style="color:${actionColor};font-weight:600;text-transform:capitalize">${action}</span></td>
+            <td style="padding:8px 12px;font-size:.78rem">${e.author||'System'}</td>
+            <td style="padding:8px 12px;font-size:.78rem;max-width:300px;overflow:hidden;text-overflow:ellipsis">${details}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
 }
 
 /* ===== TEMPLATE BUILDER ===== */

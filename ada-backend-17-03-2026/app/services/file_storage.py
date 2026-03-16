@@ -44,6 +44,41 @@ class FileStorage(StorageBackend):
         with open(path, "w") as f:
             json.dump(data, f, indent=2, default=str)
 
+    def load_all_protocols(self) -> List[Dict[str, Any]]:
+        protocols = []
+        for path in sorted(self.base_dir.glob("*.json")):
+            if path.name.startswith("test-"):
+                continue
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                pid = path.stem
+                ej = data.get("extracted_json", {}) or {}
+                bd = ej.get("BasicDetails", {}) or {}
+                si = ej.get("StudyInfo", {}) or {}
+                ts = ej.get("TestSystem", {}) or {}
+                # Build summary
+                study_no = bd.get("StudyNo", "") or ej.get("StudyNo", "") or pid
+                sponsor = bd.get("SponsorName", "") or ""
+                species = data.get("species", "") or ts.get("SpeciesStrain", "") or ""
+                title = si.get("Objective", "")
+                if title and len(title) > 120:
+                    title = title[:120] + "..."
+                protocols.append({
+                    "protocol_id": pid,
+                    "study_number": study_no,
+                    "title": title or data.get("filename", "Untitled Protocol"),
+                    "sponsor": sponsor,
+                    "species": species,
+                    "status": data.get("status", "unknown"),
+                    "filename": data.get("filename", ""),
+                    "created_at": data.get("created_at", ""),
+                    "updated_at": data.get("updated_at", ""),
+                })
+            except Exception as e:
+                logger.warning(f"Error loading protocol {path}: {e}")
+        return protocols
+
     # --- Versions ---
 
     def load_versions(self, protocol_id: str) -> List[Dict[str, Any]]:

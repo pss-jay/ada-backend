@@ -146,6 +146,7 @@ class AdaHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", mime or "application/octet-stream")
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Expose-Headers", "Content-Disposition")
         if filename:
             self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Content-Length", str(len(data)))
@@ -266,12 +267,26 @@ class AdaHandler(http.server.BaseHTTPRequestHandler):
         if path == "/api/health":
             templates = [f.name for f in TEMPLATES_DIR.glob("*.docx")] if TEMPLATES_DIR.exists() else []
             storage_type = os.getenv("STORAGE_TYPE", "file")
+
+            # Verify storage connectivity
+            storage_ok = True
+            storage_error = None
+            try:
+                backend = get_storage_backend()
+                # Quick read test to verify connectivity
+                backend.load_protocol("__health_check__")
+            except Exception as e:
+                storage_ok = False
+                storage_error = str(e)
+
             self._send_json({
-                "status": "ok",
+                "status": "ok" if storage_ok else "degraded",
                 "azure_configured": AZURE_CONFIGURED,
                 "templates_available": templates,
                 "mock_mode": not AZURE_CONFIGURED,
                 "storage": storage_type,
+                "storage_connected": storage_ok,
+                "storage_error": storage_error,
             })
             return
 
@@ -322,6 +337,31 @@ class AdaHandler(http.server.BaseHTTPRequestHandler):
             ctx = self._get_auth()
             if not ctx:
                 return
+
+        # List all protocols: /api/protocols
+        if path == "/api/protocols":
+            backend = get_storage_backend()
+            protocols = backend.load_all_protocols()
+            # Enrich with version count and amendment count
+            for p in protocols:
+                pid = p["protocol_id"]
+                versions = get_versions(pid)
+                amendments = get_amendments(pid)
+                p["version_count"] = len(versions)
+                p["amendment_count"] = len(amendments)
+                p["latest_version"] = versions[-1]["version"] if versions else "v0.0"
+                p["latest_version_status"] = versions[-1].get("status", "Draft") if versions else "Draft"
+                # Determine display status based on FRD lifecycle: Draft / Updated / Final / Amendment
+                if amendments:
+                    p["display_status"] = f"Amendment {len(amendments)}"
+                elif any(v.get("status") == "Final" for v in versions):
+                    p["display_status"] = "Final"
+                elif len(versions) > 1:
+                    p["display_status"] = "Updated"
+                else:
+                    p["display_status"] = "Draft"
+            self._send_json({"protocols": protocols})
+            return
 
         # Download generated DOCX: /api/protocols/{id}/download
         m = re.match(r"^/api/protocols/([^/]+)/download$", path)
@@ -692,51 +732,122 @@ class AdaHandler(http.server.BaseHTTPRequestHandler):
         if not ctx:
             return
 
-        # Upload SOW: /api/protocols/upload
+        # Upload SOW and/or Questionnaire: /api/protocols/upload
+        # Supports single or multiple file upload in one request
         if path == "/api/protocols/upload":
-            filename, file_data = self._parse_multipart()
-            if not filename or not file_data:
-                self._send_error(400, "No file uploaded")
+            all_parts = self._parse_multipart_all()
+            files = [p for p in all_parts if p.get("type") == "file"]
+
+            if not files:
+                self._send_error(400, "No files uploaded. Please upload at least one document (SOW or Sponsor Questionnaire).")
                 return
 
-            ext = Path(filename).suffix.lower()
-            if ext not in (".pdf", ".docx", ".doc"):
-                self._send_error(400, f"Unsupported file type: {ext}")
-                return
+            # Validate all files before processing any
+            ALLOWED_EXTENSIONS = (".pdf", ".docx", ".doc")
+            MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB per file
+            MIN_FILE_SIZE = 100  # Minimum 100 bytes (reject empty files)
+
+            validated_files = []
+            for f_part in files:
+                fname = f_part["filename"]
+                fdata = f_part["data"]
+                ext = Path(fname).suffix.lower()
+
+                if ext not in ALLOWED_EXTENSIONS:
+                    self._send_error(400, f"Unsupported file type '{ext}' for file '{fname}'. Accepted: PDF, DOCX, DOC.")
+                    return
+                if len(fdata) > MAX_FILE_SIZE:
+                    self._send_error(400, f"File '{fname}' exceeds 50MB size limit ({len(fdata) // (1024*1024)}MB).")
+                    return
+                if len(fdata) < MIN_FILE_SIZE:
+                    self._send_error(400, f"File '{fname}' appears to be empty or corrupt ({len(fdata)} bytes).")
+                    return
+
+                # Quick format validation: check magic bytes
+                if ext == ".pdf" and not fdata[:5].startswith(b"%PDF"):
+                    self._send_error(400, f"File '{fname}' does not appear to be a valid PDF.")
+                    return
+                if ext in (".docx", ".doc") and not fdata[:2] == b"PK":
+                    self._send_error(400, f"File '{fname}' does not appear to be a valid Word document.")
+                    return
+
+                validated_files.append({"filename": fname, "data": fdata, "ext": ext, "field_name": f_part.get("field_name", "file")})
 
             upload_id = str(uuid.uuid4())[:8]
-            upload_path = UPLOAD_DIR / f"{upload_id}{ext}"
-            with open(upload_path, "wb") as f:
-                f.write(file_data)
-            logger.info(f"Saved upload {upload_id}: {filename} ({len(file_data)} bytes)")
 
-            try:
-                document_text = extract_text(str(upload_path))
-            except Exception as e:
-                logger.error(f"Text extraction failed: {e}", exc_info=True)
-                self._send_error(500, f"Failed to extract text: {str(e)}")
-                return
+            # Save all files to disk and extract text from each
+            combined_text_parts = []
+            file_records = []
+            for idx, vf in enumerate(validated_files):
+                file_suffix = f"_{idx}" if len(validated_files) > 1 else ""
+                upload_path = UPLOAD_DIR / f"{upload_id}{file_suffix}{vf['ext']}"
+                with open(upload_path, "wb") as f:
+                    f.write(vf["data"])
+                logger.info(f"Saved upload {upload_id}{file_suffix}: {vf['filename']} ({len(vf['data'])} bytes)")
 
-            search_text = f"{filename} {document_text[:2000]}"
+                # Extract text from each file
+                try:
+                    doc_text = extract_text(str(upload_path))
+                    if not doc_text or len(doc_text.strip()) < 20:
+                        self._send_error(400, f"File '{vf['filename']}' produced no readable text. The file may be image-only or corrupt.")
+                        return
+                except Exception as e:
+                    logger.error(f"Text extraction failed for {vf['filename']}: {e}", exc_info=True)
+                    self._send_error(500, f"Failed to extract text from '{vf['filename']}': {str(e)}")
+                    return
+
+                # Classify document type by field name or content heuristic
+                doc_type = vf["field_name"]
+                fname_lower = vf["filename"].lower()
+                if "questionnaire" in fname_lower or "quest" in fname_lower or "sponsor" in fname_lower:
+                    doc_type = "questionnaire"
+                elif "sow" in fname_lower or "statement" in fname_lower or "scope" in fname_lower or "work" in fname_lower:
+                    doc_type = "sow"
+                elif doc_type not in ("sow", "questionnaire"):
+                    doc_type = "sow" if idx == 0 else "questionnaire"
+
+                combined_text_parts.append(f"--- BEGIN {doc_type.upper()}: {vf['filename']} ---\n{doc_text}\n--- END {doc_type.upper()} ---")
+                file_records.append({
+                    "filename": vf["filename"],
+                    "file_path": str(upload_path),
+                    "doc_type": doc_type,
+                    "text_length": len(doc_text),
+                })
+
+            # Combine all document text for extraction
+            combined_text = "\n\n".join(combined_text_parts)
+
+            # Detect species from combined text of ALL uploaded documents
+            search_text = " ".join([vf["filename"] for vf in validated_files]) + " " + combined_text[:5000]
             species = animal_detector.detect_animal(search_text)
+
+            primary_filename = validated_files[0]["filename"]
+            all_filenames = [vf["filename"] for vf in validated_files]
 
             protocol_data = {
                 "upload_id": upload_id,
-                "filename": filename,
-                "file_path": str(upload_path),
-                "document_text": document_text,
+                "filename": primary_filename,
+                "all_filenames": all_filenames,
+                "files": file_records,
+                "file_count": len(validated_files),
+                "document_text": combined_text,
                 "species_detected": species,
-                "text_length": len(document_text),
+                "text_length": len(combined_text),
                 "status": "pending_extraction",
                 "extracted_json": None,
             }
             save_protocol(upload_id, protocol_data)
 
+            logger.info(f"Protocol {upload_id}: {len(validated_files)} file(s) uploaded, species={species}, total_text={len(combined_text)} chars")
+
             self._send_json({
                 "upload_id": upload_id,
-                "filename": filename,
+                "filename": primary_filename,
+                "all_filenames": all_filenames,
+                "file_count": len(validated_files),
+                "files": [{"filename": fr["filename"], "doc_type": fr["doc_type"], "text_length": fr["text_length"]} for fr in file_records],
                 "species_detected": species,
-                "text_length": len(document_text),
+                "text_length": len(combined_text),
                 "status": "pending_extraction",
             })
             return
@@ -746,24 +857,34 @@ class AdaHandler(http.server.BaseHTTPRequestHandler):
         if m:
             protocol_id = m.group(1)
             body = self._read_body()
-            animal_type = body.get("animal_type", "")
-
-            if animal_type not in ("rat", "dog", "swine"):
-                self._send_error(400, f"Invalid animal type: {animal_type}")
-                return
 
             protocol = load_protocol(protocol_id)
             if not protocol:
                 self._send_error(404, f"Protocol {protocol_id} not found")
                 return
 
+            # Use explicitly provided animal_type, or fall back to detected species from upload
+            animal_type = body.get("animal_type", "")
+            if not animal_type or animal_type == "common":
+                animal_type = protocol.get("species_detected", "")
+            if animal_type not in ("rat", "dog", "swine"):
+                # Try re-detecting from document text
+                doc_text = protocol.get("document_text", "")
+                if doc_text:
+                    animal_type = animal_detector.detect_animal(doc_text[:5000])
+                if animal_type not in ("rat", "dog", "swine"):
+                    self._send_error(400,
+                        f"Could not determine species (detected: '{animal_type}'). "
+                        f"Please specify animal_type as 'rat', 'dog', or 'swine' in the request body.")
+                    return
+
             document_text = protocol.get("document_text", "")
             if not document_text:
-                self._send_error(400, "No document text available")
+                self._send_error(400, "No document text available. Upload a document first.")
                 return
 
             if not orchestrator:
-                self._send_error(500, "Extraction pipeline not loaded")
+                self._send_error(500, "Extraction pipeline not loaded. Check server configuration.")
                 return
 
             try:

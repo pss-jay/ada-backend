@@ -87,18 +87,70 @@ class MongoStorage(StorageBackend):
     # --- Protocols ---
 
     def load_protocol(self, protocol_id: str) -> Optional[Dict[str, Any]]:
-        doc = self.db.protocols.find_one({"protocol_id": protocol_id})
-        return self._strip_id(doc)
+        try:
+            doc = self.db.protocols.find_one({"protocol_id": protocol_id})
+            return self._strip_id(doc)
+        except Exception as e:
+            logger.error(f"MongoDB load_protocol failed for {protocol_id}: {e}", exc_info=True)
+            return None
 
     def save_protocol(self, protocol_id: str, data: Dict[str, Any]) -> None:
-        data = dict(data)
-        data["protocol_id"] = protocol_id
-        data["updated_at"] = datetime.utcnow().isoformat() + "Z"
-        self.db.protocols.update_one(
-            {"protocol_id": protocol_id},
-            {"$set": data},
-            upsert=True,
-        )
+        try:
+            data = dict(data)
+            data["protocol_id"] = protocol_id
+            data["updated_at"] = datetime.utcnow().isoformat() + "Z"
+            # Remove document_text from MongoDB storage if too large (>1MB)
+            # Store it separately or truncate to prevent hitting Cosmos DB 2MB document limit
+            doc_text = data.get("document_text", "")
+            if isinstance(doc_text, str) and len(doc_text) > 1_000_000:
+                data["document_text_truncated"] = True
+                data["document_text_length"] = len(doc_text)
+                data["document_text"] = doc_text[:1_000_000]  # Truncate to 1MB
+                logger.warning(f"Truncated document_text for {protocol_id} from {len(doc_text)} to 1M chars for MongoDB storage")
+            result = self.db.protocols.update_one(
+                {"protocol_id": protocol_id},
+                {"$set": data},
+                upsert=True,
+            )
+            logger.debug(f"MongoDB save_protocol {protocol_id}: matched={result.matched_count}, modified={result.modified_count}, upserted={result.upserted_id is not None}")
+        except Exception as e:
+            logger.error(f"MongoDB save_protocol FAILED for {protocol_id}: {e}", exc_info=True)
+            raise  # Re-raise so caller knows the save failed
+
+    def load_all_protocols(self) -> List[Dict[str, Any]]:
+        protocols = []
+        try:
+            cursor = self.db.protocols.find({}, {
+                "protocol_id": 1, "status": 1, "species": 1, "filename": 1,
+                "created_at": 1, "updated_at": 1, "extracted_json": 1
+            })
+            for doc in cursor:
+                doc = self._strip_id(doc) or {}
+                pid = doc.get("protocol_id", "")
+                ej = doc.get("extracted_json", {}) or {}
+                bd = ej.get("BasicDetails", {}) or {}
+                si = ej.get("StudyInfo", {}) or {}
+                ts = ej.get("TestSystem", {}) or {}
+                study_no = bd.get("StudyNo", "") or ej.get("StudyNo", "") or pid
+                sponsor = bd.get("SponsorName", "") or ""
+                species = doc.get("species", "") or ts.get("SpeciesStrain", "") or ""
+                title = si.get("Objective", "")
+                if title and len(title) > 120:
+                    title = title[:120] + "..."
+                protocols.append({
+                    "protocol_id": pid,
+                    "study_number": study_no,
+                    "title": title or doc.get("filename", "Untitled Protocol"),
+                    "sponsor": sponsor,
+                    "species": species,
+                    "status": doc.get("status", "unknown"),
+                    "filename": doc.get("filename", ""),
+                    "created_at": doc.get("created_at", ""),
+                    "updated_at": doc.get("updated_at", ""),
+                })
+        except Exception as e:
+            logger.error(f"MongoDB load_all_protocols failed: {e}", exc_info=True)
+        return protocols
 
     # --- Versions ---
 
@@ -109,15 +161,19 @@ class MongoStorage(StorageBackend):
         return [self._strip_id(doc) for doc in cursor]
 
     def save_versions(self, protocol_id: str, versions: List[Dict[str, Any]]) -> None:
-        # Replace all versions for this protocol (atomic-ish via delete + insert)
-        self.db.versions.delete_many({"protocol_id": protocol_id})
-        if versions:
-            docs = []
-            for v in versions:
-                doc = dict(v)
-                doc["protocol_id"] = protocol_id
-                docs.append(doc)
-            self.db.versions.insert_many(docs)
+        try:
+            self.db.versions.delete_many({"protocol_id": protocol_id})
+            if versions:
+                docs = []
+                for v in versions:
+                    doc = dict(v)
+                    doc["protocol_id"] = protocol_id
+                    docs.append(doc)
+                self.db.versions.insert_many(docs)
+            logger.debug(f"MongoDB save_versions {protocol_id}: {len(versions)} version(s) saved")
+        except Exception as e:
+            logger.error(f"MongoDB save_versions FAILED for {protocol_id}: {e}", exc_info=True)
+            raise
 
     # --- Amendments ---
 
@@ -128,14 +184,19 @@ class MongoStorage(StorageBackend):
         return [self._strip_id(doc) for doc in cursor]
 
     def save_amendments(self, protocol_id: str, amendments: List[Dict[str, Any]]) -> None:
-        self.db.amendments.delete_many({"protocol_id": protocol_id})
-        if amendments:
-            docs = []
-            for a in amendments:
-                doc = dict(a)
-                doc["protocol_id"] = protocol_id
-                docs.append(doc)
-            self.db.amendments.insert_many(docs)
+        try:
+            self.db.amendments.delete_many({"protocol_id": protocol_id})
+            if amendments:
+                docs = []
+                for a in amendments:
+                    doc = dict(a)
+                    doc["protocol_id"] = protocol_id
+                    docs.append(doc)
+                self.db.amendments.insert_many(docs)
+            logger.debug(f"MongoDB save_amendments {protocol_id}: {len(amendments)} amendment(s) saved")
+        except Exception as e:
+            logger.error(f"MongoDB save_amendments FAILED for {protocol_id}: {e}", exc_info=True)
+            raise
 
     # --- Audit Log ---
 
@@ -146,9 +207,13 @@ class MongoStorage(StorageBackend):
         return [self._strip_id(doc) for doc in cursor]
 
     def add_audit_entry(self, protocol_id: str, entry: Dict[str, Any]) -> None:
-        doc = dict(entry)
-        doc["protocol_id"] = protocol_id
-        self.db.audit_log.insert_one(doc)
+        try:
+            doc = dict(entry)
+            doc["protocol_id"] = protocol_id
+            self.db.audit_log.insert_one(doc)
+        except Exception as e:
+            logger.error(f"MongoDB add_audit_entry FAILED for {protocol_id}: {e}", exc_info=True)
+            # Don't re-raise audit failures — they shouldn't block the main operation
 
     # --- Users ---
 
@@ -160,12 +225,17 @@ class MongoStorage(StorageBackend):
         username = user_data.get("username", "")
         if not username:
             raise ValueError("User data must include a 'username' field")
-        data = dict(user_data)
-        self.db.users.update_one(
-            {"username": username},
-            {"$set": data},
-            upsert=True,
-        )
+        try:
+            data = dict(user_data)
+            self.db.users.update_one(
+                {"username": username},
+                {"$set": data},
+                upsert=True,
+            )
+            logger.debug(f"MongoDB save_user: {username}")
+        except Exception as e:
+            logger.error(f"MongoDB save_user FAILED for {username}: {e}", exc_info=True)
+            raise
 
     def load_all_users(self) -> List[Dict[str, Any]]:
         cursor = self.db.users.find().sort("username", 1)

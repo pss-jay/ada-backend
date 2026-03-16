@@ -176,32 +176,8 @@ class PromptOrchestrator:
             parsed = _parse_json_text(resp_text)
             return parsed
 
-        # No Azure configured: create a default skeleton using schema
-        logger.info("No Azure config provided; returning schema skeleton for %s", animal_type)
-        common_schema = self.primary.common_model.schema()
-        skeleton = common_schema.copy()
-        if animal_type in self.primary.species_models:
-            species_schema = self.primary.species_models[animal_type].schema()
-            skeleton.get("properties", {}).update(species_schema.get("properties", {}))
-
-        def make_default_from_schema(schema_obj: Dict[str, Any]) -> Any:
-            t = schema_obj.get("type")
-            if t == "object":
-                props = schema_obj.get("properties", {})
-                out = {}
-                for k, v in props.items():
-                    out[k] = make_default_from_schema(v)
-                return out
-            if t == "array":
-                items = schema_obj.get("items", {"type": "string"})
-                return [make_default_from_schema(items)]
-            return "" if t in ("string", None) else 0
-
-        default_obj = {}
-        if skeleton.get("properties"):
-            for key, subschema in skeleton["properties"].items():
-                default_obj[key] = make_default_from_schema(subschema)
-        else:
-            default_obj = skeleton
-
-        return default_obj
+        # No Azure configured: cannot perform real extraction
+        raise RuntimeError(
+            "Azure OpenAI is not configured. Real document extraction requires Azure OpenAI credentials. "
+            "Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY in your .env file."
+        )
