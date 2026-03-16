@@ -1,0 +1,27 @@
+{
+  "extracted_json": {
+    "BasicDetails": {
+      "StudyNo": "STD-2025-001",
+      "StudyTitle": "Toxicity Study",
+      "StudySponsor": "Acme Corp"
+    },
+    "StudyInfo": {
+      "Objective": "Evaluate safety",
+      "Route": "Oral gavage"
+    },
+    "ExperimentalDesign": {
+      "Species": "rat",
+      "NumberOfAnimals": "120",
+      "GroupCount": "4"
+    },
+    "RegulatoryCompliance": {
+      "GLPCompliant": "Yes"
+    },
+    "Personnel": {},
+    "TestMaterial": {
+      "MaterialName": "Compound X"
+    }
+  },
+  "species": "rat",
+  "status": "extraction_complete"
+}

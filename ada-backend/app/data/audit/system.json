@@ -1,0 +1,12 @@
+[
+  {
+    "timestamp": "2026-03-15T13:37:19.407719Z",
+    "action": "user_created",
+    "author": "admin",
+    "details": {
+      "new_user": "kevin",
+      "role": "study_director"
+    },
+    "protocol_id": "system"
+  }
+]

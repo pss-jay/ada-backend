@@ -1,0 +1,35 @@
+[Unit]
+Description=Ada Protocol Platform API
+Documentation=https://github.com/Altasciences/ada-backend
+After=network.target
+
+[Service]
+Type=simple
+User=ada
+Group=ada
+WorkingDirectory=/opt/ada-backend
+EnvironmentFile=/opt/ada-backend/.env
+ExecStart=/usr/bin/python3 /opt/ada-backend/main.py
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ada
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ada-backend/app/data /opt/ada-backend/uploads /opt/ada-backend/output
+
+# Resource limits
+LimitNOFILE=65536
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

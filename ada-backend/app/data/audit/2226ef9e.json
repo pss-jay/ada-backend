@@ -1,0 +1,45 @@
+[
+  {
+    "timestamp": "2026-03-15T13:38:11.410995Z",
+    "action": "version_created",
+    "author": "Ada (triggered by kevin)",
+    "details": {
+      "version": "v0.1",
+      "status": "Draft",
+      "field_count": 12
+    },
+    "protocol_id": "2226ef9e"
+  },
+  {
+    "timestamp": "2026-03-15T13:38:28.372222Z",
+    "action": "docx_uploaded_for_review",
+    "author": "kevin",
+    "details": {
+      "filename": "test_protocol.docx",
+      "confidence": 0.0,
+      "total_changes": 0
+    },
+    "protocol_id": "2226ef9e"
+  },
+  {
+    "timestamp": "2026-03-15T13:38:28.510193Z",
+    "action": "version_created",
+    "author": "kevin",
+    "details": {
+      "version": "v0.2",
+      "status": "In Review",
+      "field_count": 12
+    },
+    "protocol_id": "2226ef9e"
+  },
+  {
+    "timestamp": "2026-03-15T13:38:28.551697Z",
+    "action": "docx_changes_accepted_all",
+    "author": "kevin",
+    "details": {
+      "new_version": "v0.2",
+      "total_changes": 0
+    },
+    "protocol_id": "2226ef9e"
+  }
+]

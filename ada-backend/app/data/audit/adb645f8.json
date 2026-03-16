@@ -1,0 +1,13 @@
+[
+  {
+    "timestamp": "2026-03-14T14:58:54.770307Z",
+    "action": "version_created",
+    "author": "Ada (auto-generated)",
+    "details": {
+      "version": "v0.1",
+      "status": "Draft",
+      "field_count": 12
+    },
+    "protocol_id": "adb645f8"
+  }
+]

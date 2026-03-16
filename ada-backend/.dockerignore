@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.venv
+venv
+
+# Environment files (injected at runtime, not baked in)
+.env
+.env.production
+.env.local
+
+# Runtime data (mounted as volumes)
+app/data/*.json
+app/data/versions/*.json
+app/data/amendments/*.json
+app/data/audit/*.json
+uploads/*
+output/*
+
+# IDE / OS
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docs
+*.md
+!README.md

@@ -1,0 +1,10 @@
+{
+  "username": "kevin",
+  "email": "kevin@altasciences.com",
+  "full_name": "Kevin Bowman",
+  "role": "study_director",
+  "password_hash": "pbkdf2:sha256:150000$iGo8Xs0ZgtkAzS3Kw2172w==$wL4l8sIYcIVo7OMXZHco9hkzvjpngGQTrADAr7h6ZMw=",
+  "is_active": true,
+  "created_at": "2026-03-15T13:37:19.326035Z",
+  "last_login": "2026-03-15T13:38:27.902351Z"
+}
