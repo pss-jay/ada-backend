@@ -9,8 +9,6 @@
 # ============================================================
 
 services:
-
-  # --- Ada Backend API ---
   app:
     build:
       context: .
@@ -22,14 +20,13 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8000
+    ports:
+      - "8000:8000"
     volumes:
-      # Persist protocol data between container restarts
       - ada-data:/app/app/data
       - ada-uploads:/app/uploads
       - ada-output:/app/output
-      # Mount templates (read-only)
       - ./templates:/app/templates:ro
-      # Mount frontend HTML (read-only)
       - ./frontend:/app/frontend:ro
     networks:
       - ada-net
@@ -39,25 +36,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-  # --- Nginx Reverse Proxy ---
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: ada-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
-      # Uncomment for SSL with Let's Encrypt
-      # - ./deploy/certs:/etc/nginx/certs:ro
-      # - letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      app:
-        condition: service_healthy
-    networks:
-      - ada-net
 
 volumes:
   ada-data:
