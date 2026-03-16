@@ -21,15 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 class MongoStorage(StorageBackend):
-    """Cosmos DB MongoDB API storage backend."""
+    """MongoDB storage backend — supports both local Docker and Azure Cosmos DB."""
 
     def __init__(self):
-        try:
-            import certifi
-            ca_cert = certifi.where()
-        except ImportError:
-            ca_cert = None
-
         from pymongo import MongoClient
         from pymongo.errors import ServerSelectionTimeoutError
 
@@ -42,13 +36,27 @@ class MongoStorage(StorageBackend):
                 "Set STORAGE_TYPE=file to use JSON file storage instead."
             )
 
+        # Detect if connecting to Azure Cosmos DB
+        is_cosmos = "cosmos.azure.com" in connection_string
+
         try:
             connect_kwargs = {
                 "serverSelectionTimeoutMS": 10000,
-                "retryWrites": False,  # Cosmos DB doesn't support retryWrites
             }
-            if ca_cert:
-                connect_kwargs["tlsCAFile"] = ca_cert
+
+            if is_cosmos:
+                # Cosmos DB requires TLS and does not support retryWrites
+                try:
+                    import certifi
+                    connect_kwargs["tlsCAFile"] = certifi.where()
+                except ImportError:
+                    pass
+                connect_kwargs["tls"] = True
+                connect_kwargs["retryWrites"] = False
+                logger.info("Connecting to Azure Cosmos DB (TLS enabled)")
+            else:
+                # Local Docker MongoDB — no TLS needed
+                logger.info("Connecting to local MongoDB (TLS disabled)")
 
             self.client = MongoClient(connection_string, **connect_kwargs)
             # Test connection
@@ -105,11 +113,10 @@ class MongoStorage(StorageBackend):
     def load_versions(self, protocol_id: str) -> List[Dict[str, Any]]:
         cursor = self.db.versions.find(
             {"protocol_id": protocol_id}
-        ).sort("timestamp", 1)  # Oldest first (matches file storage order)
+        ).sort("timestamp", 1)
         return [self._strip_id(doc) for doc in cursor]
 
     def save_versions(self, protocol_id: str, versions: List[Dict[str, Any]]) -> None:
-        # Replace all versions for this protocol (atomic-ish via delete + insert)
         self.db.versions.delete_many({"protocol_id": protocol_id})
         if versions:
             docs = []

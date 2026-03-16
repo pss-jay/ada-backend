@@ -7,7 +7,7 @@
 #   docker compose down            # Stop all services
 #   docker compose up -d --build   # Rebuild and restart
 # ============================================================
-
+version: "3.9"
 services:
   app:
     build:
@@ -20,6 +20,7 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8000
+      - MONGO_URI=mongodb://mongo:27017/ada-db
     ports:
       - "8000:8000"
     volumes:
@@ -28,6 +29,8 @@ services:
       - ada-output:/app/output
       - ./templates:/app/templates:ro
       - ./frontend:/app/frontend:ro
+    depends_on:
+      - mongo
     networks:
       - ada-net
     healthcheck:
@@ -37,13 +40,22 @@ services:
       retries: 3
       start_period: 10s
 
+  mongo:
+    image: mongo:7
+    container_name: ada-mongo
+    restart: unless-stopped
+    ports:
+      - "27031:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - ada-net
+
 volumes:
   ada-data:
-    driver: local
   ada-uploads:
-    driver: local
   ada-output:
-    driver: local
+  mongo-data:
 
 networks:
   ada-net:
