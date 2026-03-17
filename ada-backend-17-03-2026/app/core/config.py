@@ -16,7 +16,7 @@ class Settings:
     AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     AZURE_OPENAI_DEPLOYMENT: str = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
     AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
-    AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2023-11-01-preview")
+    AZURE_OPENAI_API_VERSION: str = os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-01-preview")
 
     # Server
     HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -54,3 +54,4 @@ settings = Settings()
 # Ensure directories exist
 for d in [settings.OUTPUT_DIR, settings.DATA_DIR, settings.UPLOAD_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
